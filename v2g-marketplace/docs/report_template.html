@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>V2G Marketplace Report Template</title>
+    <style>
+        /*
+         * V2G Marketplace Report Template Styles
+         * This template demonstrates the structure and styling used by ReportGenerator
+         *
+         * Usage:
+         *   python cli.py simulate --agents 100 --days 7 --output results.json
+         *   python cli.py report results.json --format html --output report.html
+         */
+
+        :root {
+            /* Color palette - customize these for your brand */
+            --primary-color: #2c3e50;
+            --secondary-color: #3498db;
+            --accent-color: #27ae60;
+            --warning-color: #e74c3c;
+            --background-color: #f8f9fa;
+            --card-background: #ffffff;
+            --text-color: #2c3e50;
+            --border-color: #dee2e6;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            line-height: 1.6;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        /* Header Section */
+        header {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        header .subtitle {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+
+        .meta-info {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .meta-item {
+            background: rgba(255,255,255,0.1);
+            padding: 10px 20px;
+            border-radius: 5px;
+        }
+
+        /* Content Sections */
+        .section {
+            background: var(--card-background);
+            border-radius: 10px;
+            padding: 25px;
+            margin-bottom: 25px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .section h2 {
+            color: var(--primary-color);
+            border-bottom: 3px solid var(--secondary-color);
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+
+        /* Statistics Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+        }
+
+        .stat-card {
+            background: var(--background-color);
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            border-left: 4px solid var(--secondary-color);
+        }
+
+        .stat-card.highlight {
+            border-left-color: var(--accent-color);
+        }
+
+        .stat-card.warning {
+            border-left-color: var(--warning-color);
+        }
+
+        .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+
+        .stat-label {
+            color: #666;
+            font-size: 0.9em;
+            margin-top: 5px;
+        }
+
+        /* Chart Container */
+        .chart-container {
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .chart-container img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .chart-placeholder {
+            padding: 60px 40px;
+            background: linear-gradient(135deg, #f5f7fa, #c3cfe2);
+            border-radius: 8px;
+            color: #666;
+            font-style: italic;
+        }
+
+        .chart-placeholder svg {
+            display: block;
+            margin: 0 auto 15px;
+        }
+
+        /* Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        th {
+            background: var(--primary-color);
+            color: white;
+            font-weight: 600;
+        }
+
+        tr:nth-child(even) {
+            background: var(--background-color);
+        }
+
+        tr:hover {
+            background: #e8f4f8;
+        }
+
+        /* Badges */
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            font-weight: 600;
+        }
+
+        .badge.peak {
+            background: #ffeaea;
+            color: var(--warning-color);
+        }
+
+        .badge.offpeak {
+            background: #e8f8f5;
+            color: var(--accent-color);
+        }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            header h1 {
+                font-size: 1.8em;
+            }
+
+            .meta-info {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Utility Classes */
+        .text-success { color: var(--accent-color); }
+        .text-warning { color: var(--warning-color); }
+        .text-primary { color: var(--secondary-color); }
+        .text-muted { color: #666; }
+        .text-center { text-align: center; }
+        .mt-1 { margin-top: 10px; }
+        .mt-2 { margin-top: 20px; }
+        .mb-1 { margin-bottom: 10px; }
+        .mb-2 { margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header with Metadata -->
+        <header>
+            <h1>V2G Marketplace Report</h1>
+            <p class="subtitle">Vehicle-to-Grid Energy Trading Simulation Analysis</p>
+            <div class="meta-info">
+                <div class="meta-item">
+                    <strong>Agents:</strong> <span id="num-agents">100</span>
+                </div>
+                <div class="meta-item">
+                    <strong>Duration:</strong> <span id="num-days">7</span> days
+                </div>
+                <div class="meta-item">
+                    <strong>Intervals:</strong> <span id="total-intervals">168</span>
+                </div>
+                <div class="meta-item">
+                    <strong>Generated:</strong> <span id="generation-time">2024-11-26 10:00:00</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Summary Statistics Section -->
+        <section class="section">
+            <h2>Summary Statistics</h2>
+            <div class="stats-grid">
+                <div class="stat-card highlight">
+                    <div class="stat-value" id="avg-price">6.25</div>
+                    <div class="stat-label">Avg Price (INR/kWh)</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="min-price">3.80</div>
+                    <div class="stat-label">Min Price (INR/kWh)</div>
+                </div>
+                <div class="stat-card warning">
+                    <div class="stat-value" id="max-price">9.50</div>
+                    <div class="stat-label">Max Price (INR/kWh)</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="price-volatility">1.45</div>
+                    <div class="stat-label">Price Volatility (Std Dev)</div>
+                </div>
+                <div class="stat-card highlight">
+                    <div class="stat-value" id="total-volume">12,500</div>
+                    <div class="stat-label">Total Volume (kWh)</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="avg-daily-volume">1,786</div>
+                    <div class="stat-label">Avg Daily Volume (kWh)</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="final-token-price">1.0852</div>
+                    <div class="stat-label">Final Token Price (INR)</div>
+                </div>
+                <div class="stat-card highlight">
+                    <div class="stat-value" id="total-welfare">8,750</div>
+                    <div class="stat-label">Total Welfare (INR)</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Peak vs Off-Peak Analysis -->
+        <section class="section">
+            <h2>Peak vs Off-Peak Analysis</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Metric</th>
+                        <th>Peak Hours (6PM-10PM)</th>
+                        <th>Off-Peak Hours</th>
+                        <th>Difference</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Average Price (INR/kWh)</td>
+                        <td id="peak-price">7.85</td>
+                        <td id="offpeak-price">4.25</td>
+                        <td id="price-diff" class="text-warning">+3.60</td>
+                    </tr>
+                    <tr>
+                        <td>Number of Periods</td>
+                        <td id="peak-periods">28</td>
+                        <td id="offpeak-periods">140</td>
+                        <td>-</td>
+                    </tr>
+                    <tr>
+                        <td>Total Bids Matched</td>
+                        <td colspan="3" class="text-center" id="total-bids">1,250</td>
+                    </tr>
+                    <tr>
+                        <td>Total Asks Matched</td>
+                        <td colspan="3" class="text-center" id="total-asks">1,180</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- Price Time Series Chart -->
+        <section class="section">
+            <h2>Price Time Series</h2>
+            <div class="chart-container">
+                <!-- In actual reports, this is replaced with a base64-encoded PNG -->
+                <div class="chart-placeholder">
+                    <svg width="100" height="60" viewBox="0 0 100 60">
+                        <polyline fill="none" stroke="#3498db" stroke-width="2"
+                            points="0,50 15,45 30,30 45,35 60,20 75,25 90,15 100,20"/>
+                        <circle cx="30" cy="30" r="3" fill="#e74c3c"/>
+                        <circle cx="45" cy="35" r="3" fill="#e74c3c"/>
+                    </svg>
+                    <p>Price time series chart appears here</p>
+                    <p class="text-muted">Red points = Peak hours | Blue points = Off-peak hours</p>
+                </div>
+            </div>
+            <p class="text-center text-muted mt-1">
+                Red points indicate peak hours, blue points indicate off-peak hours
+            </p>
+        </section>
+
+        <!-- Volume Distribution Chart -->
+        <section class="section">
+            <h2>Volume Distribution</h2>
+            <div class="chart-container">
+                <!-- In actual reports, this is replaced with a base64-encoded PNG -->
+                <div class="chart-placeholder">
+                    <svg width="200" height="60" viewBox="0 0 200 60">
+                        <rect x="10" y="40" width="15" height="20" fill="#27ae60" opacity="0.7"/>
+                        <rect x="30" y="30" width="15" height="30" fill="#27ae60" opacity="0.7"/>
+                        <rect x="50" y="15" width="15" height="45" fill="#27ae60" opacity="0.7"/>
+                        <rect x="70" y="10" width="15" height="50" fill="#27ae60" opacity="0.7"/>
+                        <rect x="90" y="20" width="15" height="40" fill="#27ae60" opacity="0.7"/>
+                        <rect x="110" y="25" width="15" height="35" fill="#27ae60" opacity="0.7"/>
+                        <rect x="130" y="35" width="15" height="25" fill="#27ae60" opacity="0.7"/>
+                        <rect x="150" y="45" width="15" height="15" fill="#27ae60" opacity="0.7"/>
+                        <line x1="0" y1="60" x2="200" y2="60" stroke="#2c3e50" stroke-width="1"/>
+                    </svg>
+                    <p>Volume histogram appears here</p>
+                    <p class="text-muted">Distribution of trading volumes across all periods</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Token Price Evolution Chart -->
+        <section class="section">
+            <h2>Token Price Evolution</h2>
+            <div class="chart-container">
+                <!-- In actual reports, this is replaced with a base64-encoded PNG -->
+                <div class="chart-placeholder">
+                    <svg width="200" height="60" viewBox="0 0 200 60">
+                        <defs>
+                            <linearGradient id="tokenGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%" style="stop-color:#9b59b6;stop-opacity:0.3"/>
+                                <stop offset="100%" style="stop-color:#9b59b6;stop-opacity:0"/>
+                            </linearGradient>
+                        </defs>
+                        <path d="M0,50 L50,45 L100,40 L150,32 L200,25 L200,60 L0,60 Z" fill="url(#tokenGrad)"/>
+                        <polyline fill="none" stroke="#9b59b6" stroke-width="2"
+                            points="0,50 50,45 100,40 150,32 200,25"/>
+                        <polyline fill="none" stroke="#f39c12" stroke-width="2" stroke-dasharray="5,3"
+                            points="0,35 50,33 100,30 150,32 200,30"/>
+                    </svg>
+                    <p>Token economics evolution appears here</p>
+                    <p class="text-muted">Purple = Token Price | Orange dashed = Staking Rate</p>
+                </div>
+            </div>
+            <p class="text-center text-muted mt-1">
+                Token price and staking rate are simulated based on market activity
+            </p>
+        </section>
+
+        <!-- Sample Data Preview (optional section) -->
+        <section class="section">
+            <h2>Sample Data Preview</h2>
+            <p class="mb-2 text-muted">First 10 periods of simulation data (CSV export contains all periods)</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Period</th>
+                        <th>Hour</th>
+                        <th>Day</th>
+                        <th>Price (INR/kWh)</th>
+                        <th>Volume (kWh)</th>
+                        <th>Token Price</th>
+                        <th>Staking Rate (%)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>1</td>
+                        <td>0</td>
+                        <td>1</td>
+                        <td>4.50</td>
+                        <td>75.20</td>
+                        <td>1.0045</td>
+                        <td>5.59</td>
+                    </tr>
+                    <tr>
+                        <td>2</td>
+                        <td>1</td>
+                        <td>1</td>
+                        <td>4.35</td>
+                        <td>68.50</td>
+                        <td>1.0044</td>
+                        <td>5.56</td>
+                    </tr>
+                    <tr>
+                        <td>3</td>
+                        <td>2</td>
+                        <td>1</td>
+                        <td>4.20</td>
+                        <td>52.10</td>
+                        <td>1.0042</td>
+                        <td>5.52</td>
+                    </tr>
+                    <tr>
+                        <td>4</td>
+                        <td>3</td>
+                        <td>1</td>
+                        <td>4.15</td>
+                        <td>45.80</td>
+                        <td>1.0041</td>
+                        <td>5.50</td>
+                    </tr>
+                    <tr>
+                        <td>5</td>
+                        <td>4</td>
+                        <td>1</td>
+                        <td>4.25</td>
+                        <td>48.30</td>
+                        <td>1.0043</td>
+                        <td>5.53</td>
+                    </tr>
+                    <tr>
+                        <td>...</td>
+                        <td>...</td>
+                        <td>...</td>
+                        <td>...</td>
+                        <td>...</td>
+                        <td>...</td>
+                        <td>...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- Footer -->
+        <footer>
+            <p>Generated by V2G Marketplace Report Generator</p>
+            <p>ShaktiChain - Decentralized Energy Trading Platform</p>
+            <p class="mt-1 text-muted">
+                <a href="https://github.com/shaktichain/v2g-marketplace">GitHub</a> |
+                For questions, see the documentation
+            </p>
+        </footer>
+    </div>
+
+    <!--
+    Template Notes:
+    ==============
+
+    This is a sample template showing the structure of V2G Marketplace reports.
+    The actual reports generated by ReportGenerator have:
+
+    1. Dynamic data from simulation results
+    2. Base64-encoded PNG charts generated by matplotlib
+    3. All statistics computed from clearing_results
+
+    To generate a real report:
+
+        python cli.py simulate --agents 100 --days 7 --output results.json
+        python cli.py report results.json --format html --output report.html
+
+    Available output formats:
+    - html: Standalone HTML with embedded charts
+    - csv: Tabular data export (period, hour, day, price, volume, token_price, staking_rate)
+    - json: Condensed summary metrics
+
+    CSV columns:
+    - period: Sequential period number (1-indexed)
+    - hour: Hour of day (0-23)
+    - day: Day number (1-indexed)
+    - price: Clearing price in INR/kWh
+    - volume: Trading volume in kWh
+    - token_price: Simulated token price in INR
+    - staking_rate: Simulated staking APY percentage
+
+    JSON summary includes:
+    - avg_price, min_price, max_price
+    - total_volume, avg_daily_volume
+    - price_volatility
+    - final_token_price
+    - total_welfare
+    -->
+</body>
+</html>

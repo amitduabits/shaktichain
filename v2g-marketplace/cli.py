@@ -5,17 +5,29 @@ V2G Marketplace CLI - Command-line interface for energy trading simulations.
 Usage:
     python cli.py simulate --agents 100 --days 7 --output results.json
     python cli.py analyze results.json
+    python cli.py report results.json --format html --output report.html
+    python cli.py report results.json --format csv --output data.csv
     python cli.py --help
 """
 
 import argparse
 import json
+import os
 import random
 import sys
 import time
 from dataclasses import dataclass, asdict
 from datetime import datetime, timedelta
 from typing import List, Dict, Any
+
+# Add backend to path for imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'backend'))
+
+try:
+    from core.reports.generator import ReportGenerator
+    REPORTS_AVAILABLE = True
+except ImportError:
+    REPORTS_AVAILABLE = False
 
 
 # =============================================================================
@@ -546,6 +558,91 @@ def cmd_analyze(args):
     return 0
 
 
+def cmd_report(args):
+    """Execute report generation command."""
+    if not REPORTS_AVAILABLE:
+        print_error("Report generation module not available.")
+        print_info("Ensure backend/core/reports/generator.py exists.")
+        return 1
+
+    # Load input data
+    try:
+        with open(args.file, 'r') as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        print_error(f"File not found: {args.file}")
+        return 1
+    except json.JSONDecodeError as e:
+        print_error(f"Invalid JSON file: {e}")
+        return 1
+
+    # Validate data has required structure
+    if 'clearing_results' not in data:
+        print_error("Invalid results file: missing 'clearing_results' key")
+        return 1
+
+    print_header("V2G Marketplace Report Generator")
+    print_info(f"Input: {args.file}")
+    print_info(f"Format: {args.format}")
+    print_info(f"Output: {args.output}")
+    print()
+
+    generator = ReportGenerator()
+
+    try:
+        if args.format == 'html':
+            generator.generate_html_report(data, args.output)
+            print_success(f"HTML report generated: {Colors.BOLD}{args.output}{Colors.RESET}")
+
+            # Print summary
+            summary = generator.generate_summary_json(data)
+            print()
+            print(f"{Colors.DIM}Report Summary:{Colors.RESET}")
+            print(f"  • Avg Price: ₹{summary['avg_price']:.2f}/kWh")
+            print(f"  • Total Volume: {summary['total_volume']:,.2f} kWh")
+            print(f"  • Price Volatility: ₹{summary['price_volatility']:.2f}")
+            print(f"  • Total Welfare: ₹{summary['total_welfare']:,.2f}")
+
+        elif args.format == 'csv':
+            generator.generate_csv_export(data, args.output)
+            print_success(f"CSV export generated: {Colors.BOLD}{args.output}{Colors.RESET}")
+
+            # Print stats
+            num_rows = len(data.get('clearing_results', []))
+            print()
+            print(f"{Colors.DIM}Export Summary:{Colors.RESET}")
+            print(f"  • Rows exported: {num_rows}")
+            print(f"  • Columns: period, hour, day, price, volume, token_price, staking_rate")
+
+        elif args.format == 'json':
+            summary = generator.generate_summary_json(data)
+            with open(args.output, 'w') as f:
+                json.dump(summary, f, indent=2)
+            print_success(f"JSON summary generated: {Colors.BOLD}{args.output}{Colors.RESET}")
+
+            # Print summary
+            print()
+            print(f"{Colors.DIM}Summary Metrics:{Colors.RESET}")
+            for key, value in summary.items():
+                if isinstance(value, float):
+                    print(f"  • {key}: {value:,.4f}")
+                else:
+                    print(f"  • {key}: {value}")
+
+        else:
+            print_error(f"Unknown format: {args.format}")
+            return 1
+
+    except IOError as e:
+        print_error(f"Failed to write output: {e}")
+        return 1
+    except Exception as e:
+        print_error(f"Report generation failed: {e}")
+        return 1
+
+    return 0
+
+
 # =============================================================================
 # Main Entry Point
 # =============================================================================
@@ -565,6 +662,8 @@ def main():
   %(prog)s simulate --agents 100 --days 7 --output results.json
   %(prog)s analyze results.json
   %(prog)s analyze results.json --export stats.json
+  %(prog)s report results.json --format html --output report.html
+  %(prog)s report results.json --format csv --output data.csv
 
 {Colors.CYAN}For more information:{Colors.RESET}
   https://github.com/shaktichain/v2g-marketplace
@@ -631,6 +730,34 @@ def main():
         help='Export statistics to JSON file'
     )
 
+    # Report command
+    report_parser = subparsers.add_parser(
+        'report',
+        help='Generate reports from simulation results',
+        description='Generate HTML, CSV, or JSON reports from simulation results'
+    )
+    report_parser.add_argument(
+        'file',
+        type=str,
+        metavar='FILE',
+        help='JSON file containing simulation results'
+    )
+    report_parser.add_argument(
+        '--format', '-f',
+        type=str,
+        choices=['html', 'csv', 'json'],
+        default='html',
+        metavar='FORMAT',
+        help='Output format: html, csv, or json (default: html)'
+    )
+    report_parser.add_argument(
+        '--output', '-o',
+        type=str,
+        default='report.html',
+        metavar='FILE',
+        help='Output file path (default: report.html)'
+    )
+
     # Parse arguments
     args = parser.parse_args()
 
@@ -643,6 +770,8 @@ def main():
         return cmd_simulate(args)
     elif args.command == 'analyze':
         return cmd_analyze(args)
+    elif args.command == 'report':
+        return cmd_report(args)
 
     return 0
 
