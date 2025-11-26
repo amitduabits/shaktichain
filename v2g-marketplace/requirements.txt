@@ -1,0 +1,11 @@
+# V2G Marketplace CLI Dependencies
+#
+# The CLI (cli.py) uses only Python standard library modules:
+# - argparse, json, random, sys, time, dataclasses, datetime, typing
+#
+# No external dependencies required for basic usage.
+# Python 3.7+ required (for dataclasses support).
+
+# Optional: uncomment for enhanced features
+# numpy>=1.26.0      # For advanced statistical analysis
+# pandas>=2.1.0      # For data export to CSV/Excel
