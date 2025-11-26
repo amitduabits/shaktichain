@@ -1,35 +1,55 @@
-"""FastAPI application for V2G Marketplace."""
+"""
+V2G Marketplace API endpoints.
 
-import logging
-import time
-import uuid
+Provides REST API for simulation management and price history.
+"""
+
+import sys
+from pathlib import Path
+from contextlib import asynccontextmanager
 from typing import Optional
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from core.database import get_database, Database
+from api.schemas import (
+    SimulationCreate,
+    SimulationUpdate,
+    SimulationResponse,
+    PeriodCreate,
+    PeriodResponse,
+    PriceCreate,
+    PriceResponse,
 )
-logger = logging.getLogger(__name__)
 
-# Application version
-VERSION = "0.1.0"
+# Database instance
+db: Optional[Database] = None
 
-# In-memory storage for simulation jobs and results
-simulation_jobs: dict[str, dict] = {}
-latest_clearing_price: Optional[float] = None
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan handler for startup/shutdown."""
+    global db
+    # Startup: Initialize database
+    db = get_database()
+    yield
+    # Shutdown: Close database connection
+    if db:
+        db.close()
+
 
 app = FastAPI(
     title="V2G Marketplace API",
-    description="API for Vehicle-to-Grid energy marketplace simulation",
-    version=VERSION,
+    description="API for Vehicle-to-Grid energy marketplace simulations",
+    version="0.1.0",
+    lifespan=lifespan,
 )
 
-# CORS middleware for frontend access
+# CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -39,129 +59,107 @@ app.add_middleware(
 )
 
 
-# Request logging middleware
-@app.middleware("http")
-async def log_requests(request: Request, call_next):
-    """Log all incoming requests."""
-    start_time = time.time()
-
-    logger.info(f"Request started: {request.method} {request.url.path}")
-
-    response = await call_next(request)
-
-    duration = time.time() - start_time
-    logger.info(
-        f"Request completed: {request.method} {request.url.path} "
-        f"- Status: {response.status_code} - Duration: {duration:.3f}s"
-    )
-
-    return response
-
-
-# Pydantic models
-class SimulationRequest(BaseModel):
-    """Request model for running a simulation."""
-
-    n_agents: int = Field(default=100, ge=1, le=10000, description="Number of agents")
-    n_days: int = Field(default=7, ge=1, le=365, description="Number of days to simulate")
-
-
-class SimulationStartResponse(BaseModel):
-    """Response model for simulation start."""
-
-    job_id: str
-    status: str
-
-
-class HealthResponse(BaseModel):
-    """Response model for health check."""
-
-    status: str
-    version: str
-
-
-class MarketPriceResponse(BaseModel):
-    """Response model for market price."""
-
-    price: Optional[float]
-    currency: str = "USD/kWh"
-
-
-# Endpoints
-@app.get("/health", response_model=HealthResponse)
+@app.get("/health")
 async def health_check():
     """Health check endpoint."""
-    return {"status": "ok", "version": VERSION}
+    return {"status": "healthy"}
 
 
-@app.post("/simulation/run", response_model=SimulationStartResponse)
-async def run_simulation(request: SimulationRequest):
-    """
-    Start a new simulation in the background.
-
-    Returns a job_id that can be used to check status and retrieve results.
-    """
-    global latest_clearing_price
-
-    job_id = str(uuid.uuid4())
-
-    logger.info(
-        f"Starting simulation job {job_id} with "
-        f"n_agents={request.n_agents}, n_days={request.n_days}"
-    )
-
-    # Store job information
-    simulation_jobs[job_id] = {
-        "status": "running",
-        "n_agents": request.n_agents,
-        "n_days": request.n_days,
-        "results": None,
-    }
-
-    # TODO: Run actual simulation in background task
-    # For now, simulate completion with mock results
-    simulation_jobs[job_id]["status"] = "completed"
-    simulation_jobs[job_id]["results"] = {
-        "total_energy_traded": request.n_agents * request.n_days * 10.5,
-        "average_price": 0.12,
-        "clearing_price": 0.115,
-        "n_transactions": request.n_agents * request.n_days * 2,
-    }
-
-    # Update latest clearing price
-    latest_clearing_price = simulation_jobs[job_id]["results"]["clearing_price"]
-
-    return {"job_id": job_id, "status": "started"}
+# === Simulation Endpoints ===
 
 
-@app.get("/simulation/results/{job_id}")
-async def get_simulation_results(job_id: str):
-    """
-    Get results for a simulation job.
-
-    Returns the results if completed, or status if still running.
-    """
-    if job_id not in simulation_jobs:
-        return {"status": "not_found", "message": f"Job {job_id} not found"}
-
-    job = simulation_jobs[job_id]
-
-    if job["status"] == "running":
-        return {"status": "running"}
-
-    return {
-        "status": job["status"],
-        "n_agents": job["n_agents"],
-        "n_days": job["n_days"],
-        "results": job["results"],
-    }
+@app.post("/simulations", response_model=SimulationResponse)
+async def create_simulation(sim: SimulationCreate):
+    """Create a new simulation."""
+    sim_id = db.save_simulation({
+        "n_agents": sim.n_agents,
+        "n_days": sim.n_days,
+    })
+    result = db.get_simulation(sim_id)
+    return result
 
 
-@app.get("/market/current-price", response_model=MarketPriceResponse)
-async def get_current_price():
-    """
-    Get the latest clearing price from the most recent simulation.
+@app.get("/simulations", response_model=list[SimulationResponse])
+async def list_simulations(limit: int = Query(50, ge=1, le=100)):
+    """List recent simulations."""
+    return db.list_simulations(limit=limit)
 
-    Returns None if no simulation has been run yet.
-    """
-    return {"price": latest_clearing_price, "currency": "USD/kWh"}
+
+@app.get("/simulations/{sim_id}", response_model=SimulationResponse)
+async def get_simulation(sim_id: str):
+    """Get a simulation by ID."""
+    result = db.get_simulation(sim_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Simulation not found")
+    return result
+
+
+@app.patch("/simulations/{sim_id}", response_model=SimulationResponse)
+async def update_simulation(sim_id: str, updates: SimulationUpdate):
+    """Update a simulation."""
+    # Check if simulation exists
+    existing = db.get_simulation(sim_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Simulation not found")
+
+    # Apply updates
+    update_data = updates.model_dump(exclude_none=True)
+    if update_data:
+        db.update_simulation(sim_id, update_data)
+
+    return db.get_simulation(sim_id)
+
+
+# === Market Period Endpoints ===
+
+
+@app.post("/periods", response_model=PeriodResponse)
+async def create_period(period: PeriodCreate):
+    """Create a market period record."""
+    # Verify simulation exists
+    sim = db.get_simulation(period.simulation_id)
+    if sim is None:
+        raise HTTPException(status_code=404, detail="Simulation not found")
+
+    period_id = db.save_period(period.model_dump())
+    periods = db.get_periods(period.simulation_id)
+    # Return the newly created period
+    for p in periods:
+        if p["id"] == period_id:
+            return p
+    raise HTTPException(status_code=500, detail="Failed to retrieve created period")
+
+
+@app.get("/simulations/{sim_id}/periods", response_model=list[PeriodResponse])
+async def get_simulation_periods(sim_id: str):
+    """Get all periods for a simulation."""
+    # Verify simulation exists
+    sim = db.get_simulation(sim_id)
+    if sim is None:
+        raise HTTPException(status_code=404, detail="Simulation not found")
+
+    return db.get_periods(sim_id)
+
+
+# === Price History Endpoints ===
+
+
+@app.post("/prices", response_model=PriceResponse)
+async def create_price(price_data: PriceCreate):
+    """Add a price history entry."""
+    price_id = db.save_price(price_data.price, price_data.source)
+    history = db.get_price_history(limit=1)
+    if history and history[0]["id"] == price_id:
+        return history[0]
+    raise HTTPException(status_code=500, detail="Failed to retrieve created price")
+
+
+@app.get("/prices", response_model=list[PriceResponse])
+async def get_price_history(limit: int = Query(100, ge=1, le=1000)):
+    """Get recent price history."""
+    return db.get_price_history(limit=limit)
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
