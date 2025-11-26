@@ -15,6 +15,7 @@ import sys
 sys.path.insert(0, str(__file__).rsplit("/", 2)[0])
 
 from backend.core.demand import IndiaLoadProfile
+from backend.core.token import SHAKTIToken
 
 
 class DemandMode(Enum):
@@ -50,6 +51,11 @@ class SimulationConfig:
     base_price_per_kwh: float = 6.0  # INR per kWh
     price_demand_sensitivity: float = 0.5  # Price increase per 0.1 demand multiplier
 
+    # Token parameters
+    enable_token: bool = True  # Whether to simulate SHAKTI token
+    initial_staking_rate: float = 0.20  # Initial fraction of tokens staked
+    target_staking_rate: float = 0.40  # Equilibrium staking rate
+
     # Random seed for reproducibility
     random_seed: Optional[int] = None
 
@@ -67,6 +73,12 @@ class HourlyStats:
     evs_charging: int
     evs_idle: int
     revenue_inr: float
+    # Token metrics (optional, only populated when token enabled)
+    token_price: Optional[float] = None
+    token_supply: Optional[float] = None
+    staking_rate: Optional[float] = None
+    tokens_burned: Optional[float] = None
+    tokens_minted: Optional[float] = None
 
 
 @dataclass
@@ -95,6 +107,13 @@ class SimulationResult:
     off_peak_hours: List[int] = field(default_factory=list)
     v2g_opportunity_hours: List[int] = field(default_factory=list)
 
+    # Token metrics (lists for time series analysis)
+    token_prices: List[float] = field(default_factory=list)
+    token_supply: List[float] = field(default_factory=list)
+    staking_rates: List[float] = field(default_factory=list)
+    total_tokens_burned: float = 0.0
+    total_tokens_minted: float = 0.0
+
     def __post_init__(self):
         """Calculate summary metrics from hourly data."""
         if not self.hourly_stats:
@@ -114,6 +133,18 @@ class SimulationResult:
         self.peak_price_inr = max(prices)
         self.min_price_inr = min(prices)
         self.avg_price_inr = sum(prices) / len(prices)
+
+        # Calculate token metrics if available
+        if self.hourly_stats[0].token_price is not None:
+            self.token_prices = [h.token_price for h in self.hourly_stats]
+            self.token_supply = [h.token_supply for h in self.hourly_stats]
+            self.staking_rates = [h.staking_rate for h in self.hourly_stats]
+            self.total_tokens_burned = sum(
+                h.tokens_burned for h in self.hourly_stats if h.tokens_burned
+            )
+            self.total_tokens_minted = sum(
+                h.tokens_minted for h in self.hourly_stats if h.tokens_minted
+            )
 
 
 class SimulationRunner:
@@ -150,6 +181,17 @@ class SimulationRunner:
 
         # Initialize EV fleet
         self._init_ev_fleet()
+
+        # Initialize SHAKTI token if enabled
+        self.token: Optional[SHAKTIToken] = None
+        if self.config.enable_token:
+            self._init_token()
+
+    def _init_token(self):
+        """Initialize the SHAKTI token model."""
+        self.token = SHAKTIToken(
+            initial_staking_rate=self.config.initial_staking_rate
+        )
 
     def _init_ev_fleet(self):
         """Initialize the simulated EV fleet."""
@@ -300,6 +342,31 @@ class SimulationRunner:
             charging_cost = ev_results["charging_kwh"] * price * 0.7  # Discounted rate
             net_revenue = discharge_revenue - charging_cost
 
+            # Token metrics (default to None if token not enabled)
+            token_price = None
+            token_supply = None
+            staking_rate = None
+            tokens_burned = None
+            tokens_minted = None
+
+            # Process token transaction if enabled
+            if self.token is not None:
+                # Total trading volume in INR for this period
+                trading_volume_inr = discharge_revenue + charging_cost
+
+                # Process the transaction
+                tx_result = self.token.process_transaction(trading_volume_inr)
+
+                # Update staking rate toward equilibrium
+                self.token.update_staking(self.config.target_staking_rate)
+
+                # Record token metrics
+                token_price = self.token.current_price
+                token_supply = self.token.current_supply
+                staking_rate = self.token.staking_rate
+                tokens_burned = tx_result.burned
+                tokens_minted = tx_result.minted
+
             # Record hourly statistics
             stats = HourlyStats(
                 timestamp=current_time,
@@ -312,6 +379,11 @@ class SimulationRunner:
                 evs_charging=ev_results["charging_count"],
                 evs_idle=ev_results["idle_count"],
                 revenue_inr=net_revenue,
+                token_price=token_price,
+                token_supply=token_supply,
+                staking_rate=staking_rate,
+                tokens_burned=tokens_burned,
+                tokens_minted=tokens_minted,
             )
             hourly_stats.append(stats)
 
@@ -349,8 +421,10 @@ class SimulationRunner:
         original_mode = self.config.demand_mode
 
         for mode in modes:
-            # Reset EV fleet for fair comparison
+            # Reset EV fleet and token for fair comparison
             self._init_ev_fleet()
+            if self.config.enable_token:
+                self._init_token()
 
             self.config.demand_mode = mode
             results[mode] = self.run()
@@ -373,6 +447,9 @@ def run_comparison_demo():
         region="Delhi",
         num_evs=100,
         random_seed=42,
+        enable_token=True,
+        initial_staking_rate=0.20,
+        target_staking_rate=0.40,
     )
 
     runner = SimulationRunner(config)
@@ -390,6 +467,19 @@ def run_comparison_demo():
         print(f"  Total V2G Discharge: {result.total_v2g_discharge_kwh:,.0f} kWh")
         print(f"  Total Charging:     {result.total_charging_kwh:,.0f} kWh")
         print(f"  Net Revenue:        INR {result.total_revenue_inr:,.0f}")
+
+        # Show token metrics if available
+        if result.token_prices:
+            print(f"\n  SHAKTI Token Metrics:")
+            print(f"    Start Price:      INR {result.token_prices[0]:.4f}")
+            print(f"    End Price:        INR {result.token_prices[-1]:.4f}")
+            print(f"    Price Change:     {((result.token_prices[-1] / result.token_prices[0]) - 1) * 100:+.2f}%")
+            print(f"    Start Supply:     {result.token_supply[0]:,.0f}")
+            print(f"    End Supply:       {result.token_supply[-1]:,.0f}")
+            print(f"    Tokens Burned:    {result.total_tokens_burned:,.2f}")
+            print(f"    Tokens Minted:    {result.total_tokens_minted:,.2f}")
+            print(f"    Net Deflation:    {result.total_tokens_burned - result.total_tokens_minted:,.2f}")
+            print(f"    End Staking Rate: {result.staking_rates[-1] * 100:.1f}%")
 
     # Show demand pattern analysis for realistic mode
     realistic = results[DemandMode.REALISTIC]
