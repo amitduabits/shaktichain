@@ -1,447 +1,406 @@
 """
-Simulation Runner for V2G Marketplace
+V2G Marketplace Simulation Runner.
 
-A multi-agent simulation framework for testing vehicle-to-grid energy trading.
+This module provides a simulation framework for modeling V2G energy trading
+scenarios, integrating realistic Indian demand patterns.
 """
 
-import json
-import os
-import random
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Callable
 from enum import Enum
+import random
+
+import sys
+sys.path.insert(0, str(__file__).rsplit("/", 2)[0])
+
+from backend.core.demand import IndiaLoadProfile
 
 
-class AgentType(Enum):
-    RESIDENTIAL = "residential"
-    COMMERCIAL = "commercial"
-    FLEET = "fleet"
+class DemandMode(Enum):
+    """Demand modeling modes for simulation."""
+    FLAT = "flat"              # Constant demand (baseline)
+    REALISTIC = "realistic"    # Full Indian load profile
+    HOURLY_ONLY = "hourly"     # Only hourly variations
+    CUSTOM = "custom"          # User-provided demand function
 
 
 @dataclass
-class Bid:
-    """Represents a bid in the energy auction."""
-    agent_id: int
-    quantity: float  # kWh (positive = buy, negative = sell)
-    price: float     # INR per kWh
-    is_buy: bool
+class SimulationConfig:
+    """Configuration for V2G marketplace simulation."""
+
+    # Time parameters
+    start_time: datetime = field(default_factory=lambda: datetime(2024, 5, 15, 0, 0))
+    duration_hours: int = 24
+    time_step_minutes: int = 60
+
+    # Demand modeling
+    demand_mode: DemandMode = DemandMode.REALISTIC
+    base_demand_mw: float = 1000.0
+    region: str = "Delhi"
+    custom_demand_fn: Optional[Callable[[datetime], float]] = None
+
+    # EV fleet parameters
+    num_evs: int = 100
+    ev_battery_capacity_kwh: float = 50.0
+    ev_initial_soc_range: tuple = (0.3, 0.8)  # State of charge range
+    v2g_efficiency: float = 0.90
+
+    # Market parameters
+    base_price_per_kwh: float = 6.0  # INR per kWh
+    price_demand_sensitivity: float = 0.5  # Price increase per 0.1 demand multiplier
+
+    # Random seed for reproducibility
+    random_seed: Optional[int] = None
 
 
 @dataclass
-class Agent:
-    """Base agent for V2G marketplace simulation."""
-    id: int
-    agent_type: AgentType
-    battery_capacity: float  # kWh
-    soc: float               # State of charge (0.0 to 1.0)
-    min_soc: float = 0.2     # Minimum SOC to maintain
-    max_soc: float = 0.9     # Maximum SOC target
-
-    # Agent-specific parameters
-    charge_rate: float = 7.0      # kW
-    discharge_rate: float = 5.0   # kW
-    base_price_buy: float = 6.0   # Base willingness to pay (INR/kWh)
-    base_price_sell: float = 4.0  # Base willingness to accept (INR/kWh)
-
-    def get_current_energy(self) -> float:
-        """Get current energy stored in battery (kWh)."""
-        return self.soc * self.battery_capacity
-
-    def generate_bid(self, hour: int) -> Optional[Bid]:
-        """Generate a bid based on current SOC and time of day."""
-        # Time-of-day pricing factor (peak hours 18-22 have higher prices)
-        tod_factor = 1.0
-        if 18 <= hour % 24 <= 22:
-            tod_factor = 1.5  # Peak hours
-        elif 0 <= hour % 24 <= 6:
-            tod_factor = 0.7  # Off-peak hours
-
-        # Determine if buying or selling based on SOC and randomness
-        urgency = random.uniform(0.8, 1.2)
-
-        if self.soc < self.min_soc + 0.1:
-            # Low SOC - need to buy
-            quantity = min(self.charge_rate, (self.max_soc - self.soc) * self.battery_capacity)
-            price = self.base_price_buy * tod_factor * urgency
-            return Bid(self.id, quantity, price, is_buy=True)
-
-        elif self.soc > self.max_soc - 0.1:
-            # High SOC - willing to sell
-            quantity = min(self.discharge_rate, (self.soc - self.min_soc) * self.battery_capacity)
-            price = self.base_price_sell * tod_factor * urgency
-            return Bid(self.id, -quantity, price, is_buy=False)
-
-        else:
-            # Medium SOC - probabilistic decision
-            if random.random() < 0.5:
-                # Decide to buy
-                quantity = min(self.charge_rate * 0.5, (self.max_soc - self.soc) * self.battery_capacity)
-                price = self.base_price_buy * tod_factor * urgency * 0.9
-                return Bid(self.id, quantity, price, is_buy=True)
-            elif random.random() < 0.3:
-                # Decide to sell
-                quantity = min(self.discharge_rate * 0.5, (self.soc - self.min_soc) * self.battery_capacity)
-                price = self.base_price_sell * tod_factor * urgency * 1.1
-                return Bid(self.id, -quantity, price, is_buy=False)
-
-        return None  # No bid this period
-
-    def update_soc(self, energy_change: float):
-        """Update SOC based on energy bought (positive) or sold (negative)."""
-        new_energy = self.get_current_energy() + energy_change
-        self.soc = max(0.0, min(1.0, new_energy / self.battery_capacity))
+class HourlyStats:
+    """Statistics for a single simulation hour."""
+    timestamp: datetime
+    demand_multiplier: float
+    grid_demand_mw: float
+    energy_price_inr: float
+    v2g_discharge_kwh: float
+    charging_kwh: float
+    evs_discharging: int
+    evs_charging: int
+    evs_idle: int
+    revenue_inr: float
 
 
-def create_residential_agent(agent_id: int) -> Agent:
-    """Create a residential agent with typical EV parameters."""
-    return Agent(
-        id=agent_id,
-        agent_type=AgentType.RESIDENTIAL,
-        battery_capacity=random.uniform(40, 75),  # Typical EV battery
-        soc=random.uniform(0.3, 0.8),
-        charge_rate=random.uniform(3.3, 7.4),     # Home charger
-        discharge_rate=random.uniform(3.0, 5.0),
-        base_price_buy=random.uniform(5.0, 7.0),
-        base_price_sell=random.uniform(3.5, 5.0)
-    )
+@dataclass
+class SimulationResult:
+    """Results from a V2G marketplace simulation run."""
 
+    # Configuration used
+    config: SimulationConfig
 
-def create_commercial_agent(agent_id: int) -> Agent:
-    """Create a commercial agent with larger capacity."""
-    return Agent(
-        id=agent_id,
-        agent_type=AgentType.COMMERCIAL,
-        battery_capacity=random.uniform(100, 200),  # Larger commercial EVs
-        soc=random.uniform(0.4, 0.7),
-        charge_rate=random.uniform(22, 50),         # DC fast charging
-        discharge_rate=random.uniform(15, 30),
-        base_price_buy=random.uniform(4.5, 6.0),    # More price sensitive
-        base_price_sell=random.uniform(4.0, 5.5)
-    )
+    # Hourly data
+    hourly_stats: List[HourlyStats]
 
+    # Summary metrics
+    total_v2g_discharge_kwh: float = 0.0
+    total_charging_kwh: float = 0.0
+    total_revenue_inr: float = 0.0
+    peak_demand_mw: float = 0.0
+    min_demand_mw: float = 0.0
+    avg_demand_mw: float = 0.0
+    peak_price_inr: float = 0.0
+    min_price_inr: float = 0.0
+    avg_price_inr: float = 0.0
 
-def create_fleet_agent(agent_id: int) -> Agent:
-    """Create a fleet agent representing aggregated EVs."""
-    return Agent(
-        id=agent_id,
-        agent_type=AgentType.FLEET,
-        battery_capacity=random.uniform(500, 1000),  # Aggregated fleet
-        soc=random.uniform(0.35, 0.65),
-        charge_rate=random.uniform(100, 200),        # High-power charging
-        discharge_rate=random.uniform(80, 150),
-        base_price_buy=random.uniform(4.0, 5.5),     # Most price sensitive
-        base_price_sell=random.uniform(4.5, 6.0)
-    )
+    # Demand pattern analysis
+    peak_hours: List[int] = field(default_factory=list)
+    off_peak_hours: List[int] = field(default_factory=list)
+    v2g_opportunity_hours: List[int] = field(default_factory=list)
 
+    def __post_init__(self):
+        """Calculate summary metrics from hourly data."""
+        if not self.hourly_stats:
+            return
 
-class Auction:
-    """Simple uniform-price double auction for energy trading."""
+        demands = [h.grid_demand_mw for h in self.hourly_stats]
+        prices = [h.energy_price_inr for h in self.hourly_stats]
 
-    @staticmethod
-    def clear(bids: List[Bid]) -> tuple[float, float, float]:
-        """
-        Clear the auction and return (clearing_price, volume, welfare).
+        self.total_v2g_discharge_kwh = sum(h.v2g_discharge_kwh for h in self.hourly_stats)
+        self.total_charging_kwh = sum(h.charging_kwh for h in self.hourly_stats)
+        self.total_revenue_inr = sum(h.revenue_inr for h in self.hourly_stats)
 
-        Uses uniform-price auction where all trades settle at clearing price.
-        """
-        if not bids:
-            return 0.0, 0.0, 0.0
+        self.peak_demand_mw = max(demands)
+        self.min_demand_mw = min(demands)
+        self.avg_demand_mw = sum(demands) / len(demands)
 
-        buy_bids = sorted([b for b in bids if b.is_buy], key=lambda x: -x.price)
-        sell_bids = sorted([b for b in bids if not b.is_buy], key=lambda x: x.price)
-
-        if not buy_bids or not sell_bids:
-            return 0.0, 0.0, 0.0
-
-        # Find clearing price and volume
-        total_volume = 0.0
-        clearing_price = 0.0
-        welfare = 0.0
-
-        buy_idx = 0
-        sell_idx = 0
-        buy_remaining = buy_bids[0].quantity if buy_bids else 0
-        sell_remaining = abs(sell_bids[0].quantity) if sell_bids else 0
-
-        while buy_idx < len(buy_bids) and sell_idx < len(sell_bids):
-            buy_bid = buy_bids[buy_idx]
-            sell_bid = sell_bids[sell_idx]
-
-            # Check if trade is possible
-            if buy_bid.price < sell_bid.price:
-                break
-
-            # Determine trade quantity
-            trade_qty = min(buy_remaining, sell_remaining)
-
-            # Update clearing price (midpoint of marginal bids)
-            clearing_price = (buy_bid.price + sell_bid.price) / 2
-
-            # Calculate welfare (consumer + producer surplus)
-            welfare += (buy_bid.price - sell_bid.price) * trade_qty
-
-            total_volume += trade_qty
-
-            # Update remaining quantities
-            buy_remaining -= trade_qty
-            sell_remaining -= trade_qty
-
-            if buy_remaining <= 0.001:
-                buy_idx += 1
-                if buy_idx < len(buy_bids):
-                    buy_remaining = buy_bids[buy_idx].quantity
-
-            if sell_remaining <= 0.001:
-                sell_idx += 1
-                if sell_idx < len(sell_bids):
-                    sell_remaining = abs(sell_bids[sell_idx].quantity)
-
-        return clearing_price, total_volume, welfare
+        self.peak_price_inr = max(prices)
+        self.min_price_inr = min(prices)
+        self.avg_price_inr = sum(prices) / len(prices)
 
 
 class SimulationRunner:
     """
-    Run multi-agent V2G marketplace simulations.
+    V2G Marketplace simulation runner with Indian demand patterns.
 
-    Simulates energy trading between various agent types
-    (residential, commercial, fleet) over multiple periods.
+    This class runs simulations of V2G energy trading scenarios,
+    modeling EV fleet behavior, grid demand, and market dynamics.
+
+    Example:
+        >>> config = SimulationConfig(
+        ...     start_time=datetime(2024, 5, 15),
+        ...     duration_hours=24,
+        ...     demand_mode=DemandMode.REALISTIC,
+        ...     region="Delhi"
+        ... )
+        >>> runner = SimulationRunner(config)
+        >>> result = runner.run()
+        >>> print(f"Total V2G revenue: INR {result.total_revenue_inr:.2f}")
     """
 
-    def __init__(self, n_agents: int = 100, n_days: int = 7):
+    def __init__(self, config: Optional[SimulationConfig] = None):
         """
         Initialize the simulation runner.
 
         Args:
-            n_agents: Total number of agents in the simulation
-            n_days: Number of days to simulate
+            config: Simulation configuration. Uses defaults if not provided.
         """
-        self.n_agents = n_agents
-        self.n_days = n_days
-        self.n_periods = n_days * 24  # Hourly periods
-        self.agents: List[Agent] = []
-        self.results: Dict = {
-            'periods': [],
-            'prices': [],
-            'volumes': [],
-            'welfare': []
-        }
-        self._simulation_complete = False
+        self.config = config or SimulationConfig()
+        self.load_profile = IndiaLoadProfile(base_load_mw=self.config.base_demand_mw)
 
-    def create_agents(self):
+        if self.config.random_seed is not None:
+            random.seed(self.config.random_seed)
+
+        # Initialize EV fleet
+        self._init_ev_fleet()
+
+    def _init_ev_fleet(self):
+        """Initialize the simulated EV fleet."""
+        min_soc, max_soc = self.config.ev_initial_soc_range
+        self.ev_soc = [
+            random.uniform(min_soc, max_soc)
+            for _ in range(self.config.num_evs)
+        ]
+
+    def get_demand_multiplier(self, timestamp: datetime) -> float:
         """
-        Create a mix of agents: 60% residential, 30% commercial, 10% fleet.
-        """
-        self.agents = []
-
-        n_residential = int(self.n_agents * 0.6)
-        n_commercial = int(self.n_agents * 0.3)
-        n_fleet = self.n_agents - n_residential - n_commercial
-
-        agent_id = 0
-
-        # Create residential agents (60%)
-        for _ in range(n_residential):
-            self.agents.append(create_residential_agent(agent_id))
-            agent_id += 1
-
-        # Create commercial agents (30%)
-        for _ in range(n_commercial):
-            self.agents.append(create_commercial_agent(agent_id))
-            agent_id += 1
-
-        # Create fleet agents (10%)
-        for _ in range(n_fleet):
-            self.agents.append(create_fleet_agent(agent_id))
-            agent_id += 1
-
-    def run_single_period(self, hour: int) -> tuple[float, float, float]:
-        """
-        Run a single trading period.
+        Get demand multiplier for given timestamp based on demand mode.
 
         Args:
-            hour: The hour number (0 to n_periods-1)
+            timestamp: Simulation timestamp
 
         Returns:
-            Tuple of (clearing_price, volume, welfare)
+            Demand multiplier
         """
-        # Collect bids from all agents
-        bids = []
-        for agent in self.agents:
-            bid = agent.generate_bid(hour)
-            if bid is not None:
-                bids.append(bid)
+        mode = self.config.demand_mode
 
-        # Run auction
-        clearing_price, volume, welfare = Auction.clear(bids)
+        if mode == DemandMode.FLAT:
+            return 1.0
 
-        # Update SOCs based on auction results
-        if volume > 0 and clearing_price > 0:
-            # Determine which bids were matched
-            buy_bids = sorted([b for b in bids if b.is_buy], key=lambda x: -x.price)
-            sell_bids = sorted([b for b in bids if not b.is_buy], key=lambda x: x.price)
+        elif mode == DemandMode.HOURLY_ONLY:
+            return self.load_profile.get_hourly_multiplier(timestamp.hour)
 
-            remaining_volume = volume
+        elif mode == DemandMode.REALISTIC:
+            return self.load_profile.get_demand_multiplier(
+                hour=timestamp.hour,
+                day_of_week=timestamp.weekday(),
+                month=timestamp.month,
+                region=self.config.region
+            )
 
-            # Process matched buy bids
-            for bid in buy_bids:
-                if remaining_volume <= 0:
-                    break
-                if bid.price >= clearing_price:
-                    matched_qty = min(bid.quantity, remaining_volume)
-                    agent = next((a for a in self.agents if a.id == bid.agent_id), None)
-                    if agent:
-                        agent.update_soc(matched_qty)
-                    remaining_volume -= matched_qty
+        elif mode == DemandMode.CUSTOM:
+            if self.config.custom_demand_fn:
+                return self.config.custom_demand_fn(timestamp)
+            return 1.0
 
-            remaining_volume = volume
+        return 1.0
 
-            # Process matched sell bids
-            for bid in sell_bids:
-                if remaining_volume <= 0:
-                    break
-                if bid.price <= clearing_price:
-                    matched_qty = min(abs(bid.quantity), remaining_volume)
-                    agent = next((a for a in self.agents if a.id == bid.agent_id), None)
-                    if agent:
-                        agent.update_soc(-matched_qty)
-                    remaining_volume -= matched_qty
-
-        return clearing_price, volume, welfare
-
-    def run_simulation(self):
+    def calculate_price(self, demand_multiplier: float) -> float:
         """
-        Run the complete simulation over all periods.
+        Calculate energy price based on demand.
+
+        Higher demand leads to higher prices, simulating market dynamics.
+
+        Args:
+            demand_multiplier: Current demand multiplier
+
+        Returns:
+            Energy price in INR per kWh
         """
-        # Reset results
-        self.results = {
-            'periods': [],
-            'prices': [],
-            'volumes': [],
-            'welfare': []
+        base = self.config.base_price_per_kwh
+        sensitivity = self.config.price_demand_sensitivity
+
+        # Price increases with demand above 1.0
+        if demand_multiplier > 1.0:
+            price_multiplier = 1.0 + (demand_multiplier - 1.0) * sensitivity * 10
+        else:
+            # Slight discount during low demand
+            price_multiplier = 0.8 + demand_multiplier * 0.2
+
+        return base * price_multiplier
+
+    def simulate_ev_decisions(
+        self,
+        demand_multiplier: float,
+        price: float
+    ) -> Dict[str, float]:
+        """
+        Simulate EV charging/discharging decisions for current hour.
+
+        EVs decide to charge during low demand/price periods and
+        discharge (V2G) during high demand/price periods.
+
+        Args:
+            demand_multiplier: Current demand multiplier
+            price: Current energy price
+
+        Returns:
+            Dictionary with discharge_kwh, charging_kwh, and EV counts
+        """
+        discharge_kwh = 0.0
+        charging_kwh = 0.0
+        discharging_count = 0
+        charging_count = 0
+        idle_count = 0
+
+        capacity = self.config.ev_battery_capacity_kwh
+        efficiency = self.config.v2g_efficiency
+
+        for i, soc in enumerate(self.ev_soc):
+            # V2G discharge decision: high demand + sufficient battery
+            if demand_multiplier >= 1.4 and soc > 0.3:
+                # Discharge up to 20% of battery per hour
+                discharge_amount = min(soc - 0.2, 0.2) * capacity
+                if discharge_amount > 0:
+                    discharge_kwh += discharge_amount * efficiency
+                    self.ev_soc[i] -= discharge_amount / capacity
+                    discharging_count += 1
+                else:
+                    idle_count += 1
+
+            # Charging decision: low demand + needs charging
+            elif demand_multiplier < 0.8 and soc < 0.8:
+                # Charge up to 20% of battery per hour
+                charge_amount = min(0.8 - soc, 0.2) * capacity
+                charging_kwh += charge_amount
+                self.ev_soc[i] += charge_amount / capacity
+                charging_count += 1
+
+            else:
+                idle_count += 1
+
+        return {
+            "discharge_kwh": discharge_kwh,
+            "charging_kwh": charging_kwh,
+            "discharging_count": discharging_count,
+            "charging_count": charging_count,
+            "idle_count": idle_count,
         }
 
-        # Create agents if not already created
-        if not self.agents:
-            self.create_agents()
-
-        # Run each period
-        for hour in range(self.n_periods):
-            price, volume, welfare = self.run_single_period(hour)
-
-            self.results['periods'].append(hour)
-            self.results['prices'].append(price)
-            self.results['volumes'].append(volume)
-            self.results['welfare'].append(welfare)
-
-        self._simulation_complete = True
-
-    def get_results(self) -> Dict:
+    def run(self) -> SimulationResult:
         """
-        Get the simulation results.
+        Run the V2G marketplace simulation.
 
         Returns:
-            Dict with periods, prices, volumes, and welfare per period.
+            SimulationResult with hourly data and summary metrics
         """
-        return self.results.copy()
+        hourly_stats = []
+        current_time = self.config.start_time
+        step_delta = timedelta(minutes=self.config.time_step_minutes)
+        num_steps = (self.config.duration_hours * 60) // self.config.time_step_minutes
 
-    def get_daily_summary(self) -> List[Dict]:
+        for _ in range(num_steps):
+            # Get demand and price for this hour
+            demand_mult = self.get_demand_multiplier(current_time)
+            grid_demand = self.config.base_demand_mw * demand_mult
+            price = self.calculate_price(demand_mult)
+
+            # Simulate EV fleet decisions
+            ev_results = self.simulate_ev_decisions(demand_mult, price)
+
+            # Calculate revenue (V2G discharge revenue minus charging cost)
+            discharge_revenue = ev_results["discharge_kwh"] * price
+            charging_cost = ev_results["charging_kwh"] * price * 0.7  # Discounted rate
+            net_revenue = discharge_revenue - charging_cost
+
+            # Record hourly statistics
+            stats = HourlyStats(
+                timestamp=current_time,
+                demand_multiplier=demand_mult,
+                grid_demand_mw=grid_demand,
+                energy_price_inr=price,
+                v2g_discharge_kwh=ev_results["discharge_kwh"],
+                charging_kwh=ev_results["charging_kwh"],
+                evs_discharging=ev_results["discharging_count"],
+                evs_charging=ev_results["charging_count"],
+                evs_idle=ev_results["idle_count"],
+                revenue_inr=net_revenue,
+            )
+            hourly_stats.append(stats)
+
+            current_time += step_delta
+
+        # Identify peak and opportunity hours
+        peak_hours = self.load_profile.get_peak_hours()
+        result = SimulationResult(
+            config=self.config,
+            hourly_stats=hourly_stats,
+            peak_hours=peak_hours.get("morning_peak", []) + peak_hours.get("evening_peak", []),
+            off_peak_hours=self.load_profile.get_off_peak_hours(),
+            v2g_opportunity_hours=self.load_profile.get_v2g_opportunity_hours(),
+        )
+
+        return result
+
+    def compare_demand_modes(
+        self,
+        modes: Optional[List[DemandMode]] = None
+    ) -> Dict[DemandMode, SimulationResult]:
         """
-        Get a daily summary of the simulation results.
+        Run simulations with different demand modes for comparison.
+
+        Args:
+            modes: List of demand modes to compare. Defaults to FLAT vs REALISTIC.
 
         Returns:
-            List of dicts with daily avg_price and total_volume.
+            Dictionary mapping demand mode to simulation result
         """
-        if not self._simulation_complete:
-            return []
+        if modes is None:
+            modes = [DemandMode.FLAT, DemandMode.REALISTIC]
 
-        daily_summary = []
-        for day in range(self.n_days):
-            start_hour = day * 24
-            end_hour = start_hour + 24
+        results = {}
+        original_mode = self.config.demand_mode
 
-            day_prices = self.results['prices'][start_hour:end_hour]
-            day_volumes = self.results['volumes'][start_hour:end_hour]
+        for mode in modes:
+            # Reset EV fleet for fair comparison
+            self._init_ev_fleet()
 
-            # Calculate average price (excluding zero-volume periods)
-            valid_prices = [p for p, v in zip(day_prices, day_volumes) if v > 0]
-            avg_price = sum(valid_prices) / len(valid_prices) if valid_prices else 0.0
+            self.config.demand_mode = mode
+            results[mode] = self.run()
 
-            total_volume = sum(day_volumes)
+        # Restore original mode
+        self.config.demand_mode = original_mode
 
-            daily_summary.append({
-                'day': day + 1,
-                'avg_price': round(avg_price, 2),
-                'total_volume': round(total_volume, 2)
-            })
+        return results
 
-        return daily_summary
+
+def run_comparison_demo():
+    """Run a demo comparison of flat vs realistic demand patterns."""
+    print("=" * 60)
+    print("V2G Marketplace Simulation: Demand Pattern Comparison")
+    print("=" * 60)
+
+    config = SimulationConfig(
+        start_time=datetime(2024, 5, 15),  # Summer day
+        duration_hours=24,
+        region="Delhi",
+        num_evs=100,
+        random_seed=42,
+    )
+
+    runner = SimulationRunner(config)
+    results = runner.compare_demand_modes()
+
+    for mode, result in results.items():
+        print(f"\n{mode.value.upper()} Demand Mode:")
+        print("-" * 40)
+        print(f"  Peak Demand:        {result.peak_demand_mw:,.0f} MW")
+        print(f"  Min Demand:         {result.min_demand_mw:,.0f} MW")
+        print(f"  Avg Demand:         {result.avg_demand_mw:,.0f} MW")
+        print(f"  Peak Price:         INR {result.peak_price_inr:.2f}/kWh")
+        print(f"  Min Price:          INR {result.min_price_inr:.2f}/kWh")
+        print(f"  Avg Price:          INR {result.avg_price_inr:.2f}/kWh")
+        print(f"  Total V2G Discharge: {result.total_v2g_discharge_kwh:,.0f} kWh")
+        print(f"  Total Charging:     {result.total_charging_kwh:,.0f} kWh")
+        print(f"  Net Revenue:        INR {result.total_revenue_inr:,.0f}")
+
+    # Show demand pattern analysis for realistic mode
+    realistic = results[DemandMode.REALISTIC]
+    print(f"\nRealistic Demand Pattern Analysis:")
+    print("-" * 40)
+    print(f"  Peak Hours:          {realistic.peak_hours}")
+    print(f"  Off-Peak Hours:      {realistic.off_peak_hours}")
+    print(f"  V2G Opportunity:     {realistic.v2g_opportunity_hours}")
+
+    return results
 
 
 if __name__ == "__main__":
-    # Set random seed for reproducibility
-    random.seed(42)
-
-    # Run a 7-day simulation with 100 agents
-    print("Starting V2G Marketplace Simulation")
-    print("=" * 50)
-    print(f"Agents: 100 (60 residential, 30 commercial, 10 fleet)")
-    print(f"Duration: 7 days (168 hourly periods)")
-    print("=" * 50)
-
-    runner = SimulationRunner(n_agents=100, n_days=7)
-    runner.create_agents()
-    runner.run_simulation()
-
-    # Print daily summary
-    print("\nDaily Summary:")
-    print("-" * 40)
-    print(f"{'Day':<6}{'Avg Price (INR/kWh)':<22}{'Total Volume (kWh)'}")
-    print("-" * 40)
-
-    daily_summary = runner.get_daily_summary()
-    for day_data in daily_summary:
-        print(f"{day_data['day']:<6}{day_data['avg_price']:<22}{day_data['total_volume']}")
-
-    print("-" * 40)
-
-    # Calculate overall statistics
-    results = runner.get_results()
-    total_volume = sum(results['volumes'])
-    valid_prices = [p for p, v in zip(results['prices'], results['volumes']) if v > 0]
-    avg_price = sum(valid_prices) / len(valid_prices) if valid_prices else 0
-    total_welfare = sum(results['welfare'])
-
-    print(f"\nOverall Statistics:")
-    print(f"  Total Volume Traded: {total_volume:.2f} kWh")
-    print(f"  Average Price: {avg_price:.2f} INR/kWh")
-    print(f"  Total Social Welfare: {total_welfare:.2f} INR")
-
-    # Save results to JSON
-    output_dir = os.path.join(os.path.dirname(__file__), 'results')
-    os.makedirs(output_dir, exist_ok=True)
-
-    output_path = os.path.join(output_dir, 'sim_output.json')
-
-    output_data = {
-        'config': {
-            'n_agents': 100,
-            'n_days': 7,
-            'agent_mix': {
-                'residential': 60,
-                'commercial': 30,
-                'fleet': 10
-            }
-        },
-        'results': results,
-        'daily_summary': daily_summary,
-        'overall': {
-            'total_volume': round(total_volume, 2),
-            'avg_price': round(avg_price, 2),
-            'total_welfare': round(total_welfare, 2)
-        }
-    }
-
-    with open(output_path, 'w') as f:
-        json.dump(output_data, f, indent=2)
-
-    print(f"\nResults saved to: {output_path}")
+    run_comparison_demo()
