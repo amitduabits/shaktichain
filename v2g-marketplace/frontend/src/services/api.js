@@ -51,7 +51,7 @@ export async function getHealth() {
 }
 
 /**
- * Run a V2G marketplace simulation
+ * Run a V2G marketplace simulation (legacy)
  * @param {Object} params - Simulation parameters
  * @param {number} params.numProsumers - Number of prosumers in simulation
  * @param {number} params.numEvs - Number of EVs in simulation
@@ -69,12 +69,58 @@ export async function runSimulation(params) {
 }
 
 /**
- * Get results of a simulation job
+ * Get results of a simulation job (legacy)
  * @param {string} jobId - The job ID returned from runSimulation
  * @returns {Promise<Object>} Simulation results
  */
 export async function getResults(jobId) {
   return api.get(`/simulation/results/${jobId}`);
+}
+
+/**
+ * Start a new simulation with enhanced parameters
+ * @param {Object} params - Simulation configuration
+ * @param {number} params.num_agents - Number of agents (50-1000)
+ * @param {number} params.duration_days - Duration in days (1, 7, or 30)
+ * @param {Object} params.agent_mix - Agent mix percentages
+ * @param {number} params.agent_mix.residential - Residential percentage
+ * @param {number} params.agent_mix.commercial - Commercial percentage
+ * @param {number} params.agent_mix.fleet - Fleet percentage
+ * @param {string} params.region - Region code (delhi, mumbai, bangalore, chennai)
+ * @returns {Promise<Object>} Job information with job_id
+ */
+export async function startSimulation(params) {
+  return api.post('/simulation/start', params);
+}
+
+/**
+ * Get simulation status and progress
+ * @param {string} jobId - The job ID returned from startSimulation
+ * @returns {Promise<Object>} Status object with progress, current_day, total_days, status, and results
+ */
+export async function getSimulationStatus(jobId) {
+  return api.get(`/simulation/status/${jobId}`);
+}
+
+/**
+ * Download simulation results as CSV
+ * @param {string} jobId - The job ID of a completed simulation
+ */
+export async function downloadSimulationCsv(jobId) {
+  const response = await api.get(`/simulation/download/${jobId}`, {
+    responseType: 'blob',
+  });
+
+  // Create download link
+  const blob = new Blob([response], { type: 'text/csv' });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', `simulation_${jobId}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
 }
 
 /**
