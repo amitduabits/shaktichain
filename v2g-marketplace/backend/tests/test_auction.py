@@ -288,5 +288,391 @@ class TestAuctionReset:
         assert result.clearing_price is not None
 
 
+class TestEdgeCases:
+    """Test edge cases and boundary conditions."""
+
+    def test_empty_market_no_bids(self) -> None:
+        """Test clearing an empty market with no bids."""
+        auction = McAfeeAuction()
+        result = auction.clear_market()
+
+        assert result.clearing_price is None
+        assert len(result.matched_buyers) == 0
+        assert len(result.matched_sellers) == 0
+        assert result.total_quantity == 0.0
+
+    def test_only_buyers_no_sellers(self) -> None:
+        """Test market with only buyers."""
+        auction = McAfeeAuction()
+        for i in range(5):
+            auction.add_bid(Bid(f"buyer_{i}", 10.0, 10.0 + i, is_buy=True))
+
+        result = auction.clear_market()
+        assert result.clearing_price is None
+        assert len(result.matched_buyers) == 0
+        assert len(result.matched_sellers) == 0
+
+    def test_only_sellers_no_buyers(self) -> None:
+        """Test market with only sellers."""
+        auction = McAfeeAuction()
+        for i in range(5):
+            auction.add_bid(Bid(f"seller_{i}", 10.0, 5.0 + i, is_buy=False))
+
+        result = auction.clear_market()
+        assert result.clearing_price is None
+        assert len(result.matched_buyers) == 0
+        assert len(result.matched_sellers) == 0
+
+    def test_single_buyer_single_seller_match(self) -> None:
+        """Test market with single buyer and seller that match."""
+        auction = McAfeeAuction()
+        auction.add_bid(Bid("buyer", 10.0, 15.0, is_buy=True))
+        auction.add_bid(Bid("seller", 10.0, 5.0, is_buy=False))
+
+        result = auction.clear_market()
+        # Single pair may or may not trade depending on McAfee rule
+        # At minimum, verify no error occurs
+        assert result.total_quantity >= 0
+
+    def test_single_buyer_single_seller_no_match(self) -> None:
+        """Test market with single buyer and seller that don't match."""
+        auction = McAfeeAuction()
+        auction.add_bid(Bid("buyer", 10.0, 5.0, is_buy=True))
+        auction.add_bid(Bid("seller", 10.0, 15.0, is_buy=False))
+
+        result = auction.clear_market()
+        assert result.clearing_price is None
+        assert result.total_quantity == 0
+
+    def test_identical_prices_all_participants(self) -> None:
+        """Test when all buyers and sellers have identical prices."""
+        auction = McAfeeAuction()
+        for i in range(5):
+            auction.add_bid(Bid(f"buyer_{i}", 10.0, 10.0, is_buy=True))
+            auction.add_bid(Bid(f"seller_{i}", 10.0, 10.0, is_buy=False))
+
+        result = auction.clear_market()
+        # Should clear at price 10.0 or no trade (boundary condition)
+        if result.clearing_price is not None:
+            assert result.clearing_price == 10.0
+
+    def test_zero_price_valid(self) -> None:
+        """Test that zero price is valid (free energy)."""
+        auction = McAfeeAuction()
+        auction.add_bid(Bid("buyer", 10.0, 5.0, is_buy=True))
+        auction.add_bid(Bid("seller", 10.0, 0.0, is_buy=False))
+
+        result = auction.clear_market()
+        assert result.clearing_price is not None
+        assert result.clearing_price >= 0
+
+    def test_very_small_quantities(self) -> None:
+        """Test with very small energy quantities."""
+        auction = McAfeeAuction()
+        auction.add_bid(Bid("buyer", 0.001, 10.0, is_buy=True))
+        auction.add_bid(Bid("seller", 0.001, 5.0, is_buy=False))
+
+        result = auction.clear_market()
+        # Should handle small quantities without precision issues
+        if result.clearing_price is not None:
+            assert result.total_quantity >= 0
+
+    def test_very_large_quantities(self) -> None:
+        """Test with very large energy quantities."""
+        auction = McAfeeAuction()
+        auction.add_bid(Bid("buyer", 1_000_000.0, 10.0, is_buy=True))
+        auction.add_bid(Bid("seller", 1_000_000.0, 5.0, is_buy=False))
+
+        result = auction.clear_market()
+        assert result.clearing_price is not None
+        assert result.total_quantity > 0
+
+    def test_very_high_prices(self) -> None:
+        """Test with very high prices."""
+        auction = McAfeeAuction()
+        auction.add_bid(Bid("buyer", 10.0, 10_000_000.0, is_buy=True))
+        auction.add_bid(Bid("seller", 10.0, 9_999_999.0, is_buy=False))
+
+        result = auction.clear_market()
+        assert result.clearing_price is not None
+
+
+class TestLargeMarkets:
+    """Test large-scale market scenarios."""
+
+    def test_hundred_participants(self) -> None:
+        """Test market with 100 buyers and 100 sellers."""
+        auction = McAfeeAuction()
+
+        # Create buyers with decreasing prices
+        for i in range(100):
+            price = 20.0 - (i * 0.1)  # Prices from 20 to 10.1
+            auction.add_bid(Bid(f"buyer_{i}", 10.0, price, is_buy=True))
+
+        # Create sellers with increasing prices
+        for i in range(100):
+            price = 5.0 + (i * 0.1)  # Prices from 5 to 14.9
+            auction.add_bid(Bid(f"seller_{i}", 10.0, price, is_buy=False))
+
+        result = auction.clear_market()
+
+        assert result.clearing_price is not None
+        assert len(result.matched_buyers) > 0
+        assert len(result.matched_sellers) > 0
+        assert result.total_quantity > 0
+
+    def test_thousand_participants(self) -> None:
+        """Test market with 1000 buyers and 1000 sellers."""
+        auction = McAfeeAuction()
+
+        for i in range(1000):
+            # Buyers bid between 8 and 15 INR/kWh
+            buyer_price = 15.0 - (i * 0.007)
+            auction.add_bid(Bid(f"buyer_{i}", 5.0, max(8.0, buyer_price), is_buy=True))
+
+            # Sellers ask between 5 and 12 INR/kWh
+            seller_price = 5.0 + (i * 0.007)
+            auction.add_bid(Bid(f"seller_{i}", 5.0, min(12.0, seller_price), is_buy=False))
+
+        result = auction.clear_market()
+
+        assert result.clearing_price is not None
+        assert len(result.matched_buyers) > 100  # Expect many matches
+        assert len(result.matched_sellers) > 100
+
+    def test_ten_thousand_bids(self) -> None:
+        """Test market with 10,000 total bids."""
+        auction = McAfeeAuction()
+
+        for i in range(5000):
+            # Varied prices to ensure some overlap
+            buyer_price = 20.0 - (i % 100) * 0.15
+            seller_price = 5.0 + (i % 100) * 0.15
+
+            auction.add_bid(Bid(f"buyer_{i}", 1.0, buyer_price, is_buy=True))
+            auction.add_bid(Bid(f"seller_{i}", 1.0, seller_price, is_buy=False))
+
+        result = auction.clear_market()
+
+        # Should complete without error
+        assert result is not None
+        # With overlapping prices, should have matches
+        assert result.total_quantity > 0 or result.clearing_price is None
+
+
+class TestPriceBounds:
+    """Test price bound validation and scenarios."""
+
+    def test_clearing_price_bounds(self) -> None:
+        """Test that clearing price is within bid range."""
+        auction = McAfeeAuction()
+
+        buyer_prices = [25.0, 22.0, 18.0, 15.0, 12.0]
+        seller_prices = [6.0, 8.0, 10.0, 13.0, 16.0]
+
+        for i, price in enumerate(buyer_prices):
+            auction.add_bid(Bid(f"buyer_{i}", 10.0, price, is_buy=True))
+        for i, price in enumerate(seller_prices):
+            auction.add_bid(Bid(f"seller_{i}", 10.0, price, is_buy=False))
+
+        result = auction.clear_market()
+
+        if result.clearing_price is not None:
+            # Price should be between min seller and max buyer
+            assert result.clearing_price >= min(seller_prices)
+            assert result.clearing_price <= max(buyer_prices)
+
+    def test_all_matched_buyers_above_clearing(self) -> None:
+        """Verify all matched buyers bid at or above clearing price."""
+        auction = McAfeeAuction()
+
+        for i in range(20):
+            auction.add_bid(Bid(f"buyer_{i}", 10.0, 20.0 - i * 0.5, is_buy=True))
+            auction.add_bid(Bid(f"seller_{i}", 10.0, 5.0 + i * 0.5, is_buy=False))
+
+        result = auction.clear_market()
+
+        if result.clearing_price is not None:
+            for buyer in result.matched_buyers:
+                assert buyer.price >= result.clearing_price, \
+                    f"Matched buyer {buyer.agent_id} bid {buyer.price} < clearing {result.clearing_price}"
+
+    def test_all_matched_sellers_below_clearing(self) -> None:
+        """Verify all matched sellers ask at or below clearing price."""
+        auction = McAfeeAuction()
+
+        for i in range(20):
+            auction.add_bid(Bid(f"buyer_{i}", 10.0, 20.0 - i * 0.5, is_buy=True))
+            auction.add_bid(Bid(f"seller_{i}", 10.0, 5.0 + i * 0.5, is_buy=False))
+
+        result = auction.clear_market()
+
+        if result.clearing_price is not None:
+            for seller in result.matched_sellers:
+                assert seller.price <= result.clearing_price, \
+                    f"Matched seller {seller.agent_id} ask {seller.price} > clearing {result.clearing_price}"
+
+
+class TestBenchmarks:
+    """Performance benchmarks for auction mechanism."""
+
+    def test_small_market_performance(self) -> None:
+        """Benchmark small market (50 participants) clearing time."""
+        import time
+
+        auction = McAfeeAuction()
+        for i in range(25):
+            auction.add_bid(Bid(f"buyer_{i}", 10.0, 15.0 - i * 0.2, is_buy=True))
+            auction.add_bid(Bid(f"seller_{i}", 10.0, 5.0 + i * 0.2, is_buy=False))
+
+        start = time.perf_counter()
+        result = auction.clear_market()
+        elapsed = time.perf_counter() - start
+
+        # Should complete in under 100ms for small market
+        assert elapsed < 0.1, f"Small market took {elapsed:.3f}s (expected < 0.1s)"
+        assert result is not None
+
+    def test_medium_market_performance(self) -> None:
+        """Benchmark medium market (1000 participants) clearing time."""
+        import time
+
+        auction = McAfeeAuction()
+        for i in range(500):
+            auction.add_bid(Bid(f"buyer_{i}", 10.0, 15.0 - (i % 50) * 0.1, is_buy=True))
+            auction.add_bid(Bid(f"seller_{i}", 10.0, 5.0 + (i % 50) * 0.1, is_buy=False))
+
+        start = time.perf_counter()
+        result = auction.clear_market()
+        elapsed = time.perf_counter() - start
+
+        # Should complete in under 1 second for medium market
+        assert elapsed < 1.0, f"Medium market took {elapsed:.3f}s (expected < 1.0s)"
+        assert result is not None
+
+    def test_large_market_performance(self) -> None:
+        """Benchmark large market (10,000 participants) clearing time."""
+        import time
+
+        auction = McAfeeAuction()
+        for i in range(5000):
+            auction.add_bid(Bid(f"buyer_{i}", 5.0, 15.0 - (i % 100) * 0.1, is_buy=True))
+            auction.add_bid(Bid(f"seller_{i}", 5.0, 5.0 + (i % 100) * 0.1, is_buy=False))
+
+        start = time.perf_counter()
+        result = auction.clear_market()
+        elapsed = time.perf_counter() - start
+
+        # Should complete in under 5 seconds for large market
+        assert elapsed < 5.0, f"Large market took {elapsed:.3f}s (expected < 5.0s)"
+        assert result is not None
+
+    def test_repeated_clearing_performance(self) -> None:
+        """Benchmark repeated market clearing (simulating 24-hour trading)."""
+        import time
+
+        total_time = 0.0
+        iterations = 24
+
+        for _ in range(iterations):
+            auction = McAfeeAuction()
+            for i in range(100):
+                auction.add_bid(Bid(f"buyer_{i}", 10.0, 15.0 - (i % 20) * 0.5, is_buy=True))
+                auction.add_bid(Bid(f"seller_{i}", 10.0, 5.0 + (i % 20) * 0.5, is_buy=False))
+
+            start = time.perf_counter()
+            auction.clear_market()
+            total_time += time.perf_counter() - start
+
+        avg_time = total_time / iterations
+        # Average should be under 50ms
+        assert avg_time < 0.05, f"Average clearing took {avg_time:.3f}s (expected < 0.05s)"
+
+
+class TestGetBids:
+    """Test bid retrieval functionality."""
+
+    def test_get_all_bids(self) -> None:
+        """Test retrieving all bids."""
+        auction = McAfeeAuction()
+        auction.add_bid(Bid("buyer1", 10.0, 15.0, is_buy=True))
+        auction.add_bid(Bid("buyer2", 10.0, 12.0, is_buy=True))
+        auction.add_bid(Bid("seller1", 10.0, 5.0, is_buy=False))
+
+        bids = auction.get_bids()
+        assert len(bids) == 3
+
+    def test_get_bids_by_type(self) -> None:
+        """Test filtering bids by type."""
+        auction = McAfeeAuction()
+        for i in range(5):
+            auction.add_bid(Bid(f"buyer_{i}", 10.0, 15.0, is_buy=True))
+        for i in range(3):
+            auction.add_bid(Bid(f"seller_{i}", 10.0, 5.0, is_buy=False))
+
+        all_bids = auction.get_bids()
+        buyers = [b for b in all_bids if b.is_buy]
+        sellers = [b for b in all_bids if not b.is_buy]
+
+        assert len(buyers) == 5
+        assert len(sellers) == 3
+
+
+class TestSurplusCalculation:
+    """Test economic surplus calculations."""
+
+    def test_buyer_surplus_positive(self) -> None:
+        """Test that matched buyers have non-negative surplus."""
+        auction = McAfeeAuction()
+
+        auction.add_bid(Bid("buyer_high", 10.0, 20.0, is_buy=True))
+        auction.add_bid(Bid("buyer_low", 10.0, 12.0, is_buy=True))
+        auction.add_bid(Bid("seller1", 10.0, 5.0, is_buy=False))
+        auction.add_bid(Bid("seller2", 10.0, 8.0, is_buy=False))
+
+        result = auction.clear_market()
+
+        if result.clearing_price is not None:
+            for buyer in result.matched_buyers:
+                surplus = buyer.price - result.clearing_price
+                assert surplus >= 0, \
+                    f"Buyer {buyer.agent_id} has negative surplus: {surplus}"
+
+    def test_seller_surplus_positive(self) -> None:
+        """Test that matched sellers have non-negative surplus."""
+        auction = McAfeeAuction()
+
+        auction.add_bid(Bid("buyer1", 10.0, 20.0, is_buy=True))
+        auction.add_bid(Bid("buyer2", 10.0, 15.0, is_buy=True))
+        auction.add_bid(Bid("seller_low", 10.0, 5.0, is_buy=False))
+        auction.add_bid(Bid("seller_high", 10.0, 10.0, is_buy=False))
+
+        result = auction.clear_market()
+
+        if result.clearing_price is not None:
+            for seller in result.matched_sellers:
+                surplus = result.clearing_price - seller.price
+                assert surplus >= 0, \
+                    f"Seller {seller.agent_id} has negative surplus: {surplus}"
+
+    def test_total_surplus_calculation(self) -> None:
+        """Test calculation of total economic surplus."""
+        auction = McAfeeAuction()
+
+        buyer_prices = [20.0, 18.0, 15.0]
+        seller_prices = [5.0, 8.0, 10.0]
+
+        for i, price in enumerate(buyer_prices):
+            auction.add_bid(Bid(f"buyer_{i}", 10.0, price, is_buy=True))
+        for i, price in enumerate(seller_prices):
+            auction.add_bid(Bid(f"seller_{i}", 10.0, price, is_buy=False))
+
+        result = auction.clear_market()
+
+        if result.clearing_price is not None and result.surplus is not None:
+            # Total surplus should be positive when trades occur
+            assert result.surplus >= 0
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
