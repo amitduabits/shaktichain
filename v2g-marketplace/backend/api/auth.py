@@ -5,7 +5,9 @@ Provides JWT-based authentication with bcrypt password hashing.
 """
 
 import os
+import sys
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Optional
 
 import bcrypt
@@ -14,7 +16,19 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr, Field
 
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from core.database import get_database
+from core.logging import (
+    get_logger,
+    LoggerFactory,
+    set_user_context,
+)
+from core.metrics import (
+    record_user_registration,
+    record_user_login,
+)
 
 # JWT configuration
 JWT_SECRET = os.environ.get("JWT_SECRET", "v2g-marketplace-secret-key-change-in-production")
@@ -26,6 +40,9 @@ security = HTTPBearer()
 
 # Router
 router = APIRouter(prefix="/auth", tags=["authentication"])
+
+# Logger
+logger = LoggerFactory.get_auth_logger()
 
 
 # === Schemas ===
@@ -89,8 +106,10 @@ def decode_token(token: str) -> Optional[dict]:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
         return payload
     except jwt.ExpiredSignatureError:
+        logger.warning("token_expired", message="JWT token has expired")
         return None
-    except jwt.InvalidTokenError:
+    except jwt.InvalidTokenError as e:
+        logger.warning("token_invalid", message="Invalid JWT token", error=str(e))
         return None
 
 
@@ -118,11 +137,15 @@ async def get_current_user(
     user = db.get_user_by_id(payload["sub"])
 
     if user is None:
+        logger.warning("user_not_found", user_id=payload["sub"])
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    # Set user context for logging
+    set_user_context(user["id"], user["email"])
 
     return user
 
@@ -147,7 +170,12 @@ async def get_current_user_optional(
         return None
 
     db = get_database()
-    return db.get_user_by_id(payload["sub"])
+    user = db.get_user_by_id(payload["sub"])
+
+    if user:
+        set_user_context(user["id"], user["email"])
+
+    return user
 
 
 # === Endpoints ===
@@ -164,6 +192,11 @@ async def register(user_data: UserRegister):
     # Check if email already exists
     existing_user = db.get_user_by_email(user_data.email)
     if existing_user:
+        logger.info(
+            "registration_failed",
+            reason="email_exists",
+            email=user_data.email,
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email already registered"
@@ -176,6 +209,16 @@ async def register(user_data: UserRegister):
         "password_hash": password_hash,
         "role": "user",
     })
+
+    # Record metrics
+    record_user_registration()
+
+    # Log successful registration
+    logger.info(
+        "user_registered",
+        user_id=user_id,
+        email=user_data.email,
+    )
 
     # Generate token
     token = create_access_token(user_id, user_data.email, "user")
@@ -195,6 +238,13 @@ async def login(user_data: UserLogin):
     # Find user by email
     user = db.get_user_by_email(user_data.email)
     if user is None:
+        # Record failed login
+        record_user_login(success=False)
+        logger.warning(
+            "login_failed",
+            reason="user_not_found",
+            email=user_data.email,
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password"
@@ -202,10 +252,28 @@ async def login(user_data: UserLogin):
 
     # Verify password
     if not verify_password(user_data.password, user["password_hash"]):
+        # Record failed login
+        record_user_login(success=False)
+        logger.warning(
+            "login_failed",
+            reason="invalid_password",
+            email=user_data.email,
+            user_id=user["id"],
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password"
         )
+
+    # Record successful login
+    record_user_login(success=True)
+
+    # Log successful login
+    logger.info(
+        "user_logged_in",
+        user_id=user["id"],
+        email=user["email"],
+    )
 
     # Generate token
     token = create_access_token(user["id"], user["email"], user["role"])
