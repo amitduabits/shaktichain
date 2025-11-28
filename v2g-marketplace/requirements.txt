@@ -1,10 +1,15 @@
-# V2G Marketplace CLI Dependencies
+# V2G Marketplace Dependencies
 #
-# The CLI (cli.py) uses only Python standard library modules:
-# - argparse, json, random, sys, time, dataclasses, datetime, typing
-#
-# No external dependencies required for basic usage.
 # Python 3.7+ required (for dataclasses support).
+
+# Web framework
+fastapi>=0.109.0
+uvicorn>=0.27.0
+pydantic>=2.0.0
+
+# Authentication
+pyjwt>=2.8.0
+bcrypt>=4.1.0
 
 # Optional: uncomment for enhanced features
 # numpy>=1.26.0      # For advanced statistical analysis

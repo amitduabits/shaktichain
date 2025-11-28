@@ -160,4 +160,36 @@ export async function getProsumerById(prosumerId) {
   return api.get(`/prosumers/${prosumerId}`);
 }
 
+// === Authentication ===
+
+/**
+ * Register a new user account
+ * @param {Object} credentials - User credentials
+ * @param {string} credentials.email - User email
+ * @param {string} credentials.password - User password
+ * @returns {Promise<Object>} Token response with access_token
+ */
+export async function register(credentials) {
+  return api.post('/auth/register', credentials);
+}
+
+/**
+ * Login with email and password
+ * @param {Object} credentials - User credentials
+ * @param {string} credentials.email - User email
+ * @param {string} credentials.password - User password
+ * @returns {Promise<Object>} Token response with access_token
+ */
+export async function login(credentials) {
+  return api.post('/auth/login', credentials);
+}
+
+/**
+ * Get current authenticated user info
+ * @returns {Promise<Object>} User object with id, email, role, created_at
+ */
+export async function getCurrentUser() {
+  return api.get('/auth/me');
+}
+
 export default api;
