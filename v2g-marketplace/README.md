@@ -54,6 +54,7 @@ This platform is designed to work within India's regulatory framework:
 
 - Python 3.9+
 - Node.js 18+ (for frontend)
+- Docker & Docker Compose (for containerized deployment)
 
 ### Installation
 
@@ -71,6 +72,115 @@ pip install -r requirements.txt
 # Run tests
 pytest tests/
 ```
+
+## Docker Deployment
+
+The application can be deployed using Docker for both development and production environments.
+
+### Quick Start with Docker
+
+```bash
+# Build and run in production mode
+./scripts/docker-build.sh
+./scripts/docker-run.sh
+
+# Access the application
+# Frontend: http://localhost
+# Backend API: http://localhost:8000
+# API Docs: http://localhost:8000/docs
+```
+
+### Development Mode (Hot Reload)
+
+```bash
+# Build and run with hot reload enabled
+./scripts/docker-build.sh --dev
+./scripts/docker-run.sh --dev
+
+# Access the application
+# Frontend: http://localhost:3000
+# Backend API: http://localhost:8000
+```
+
+### Docker Commands
+
+#### Build Images
+```bash
+# Production build
+./scripts/docker-build.sh
+
+# Development build
+./scripts/docker-build.sh --dev
+
+# Build without cache
+./scripts/docker-build.sh --no-cache
+```
+
+#### Run Containers
+```bash
+# Production mode (detached)
+./scripts/docker-run.sh
+
+# Development mode with hot reload
+./scripts/docker-run.sh --dev
+
+# Run in foreground (see logs)
+./scripts/docker-run.sh --foreground
+
+# Build and run
+./scripts/docker-run.sh --build
+```
+
+#### Stop Containers
+```bash
+# Stop production containers
+./scripts/docker-stop.sh
+
+# Stop development containers
+./scripts/docker-stop.sh --dev
+
+# Stop all containers
+./scripts/docker-stop.sh --all
+
+# Stop and remove volumes (WARNING: deletes data)
+./scripts/docker-stop.sh --volumes
+```
+
+### Docker Compose Files
+
+| File | Description |
+|------|-------------|
+| `docker-compose.yml` | Production configuration |
+| `docker-compose.dev.yml` | Development with hot reload |
+
+### Manual Docker Commands
+
+```bash
+# Production
+docker-compose up -d
+docker-compose logs -f
+docker-compose down
+
+# Development
+docker-compose -f docker-compose.dev.yml up -d
+docker-compose -f docker-compose.dev.yml logs -f
+docker-compose -f docker-compose.dev.yml down
+```
+
+### Data Persistence
+
+Data is persisted in the `./data` directory, which is mounted as a volume. This includes:
+- SQLite database (`v2g.db`)
+- Simulation results
+- Generated reports
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DATABASE_URL` | `sqlite:///data/v2g.db` | Database connection URL |
+| `DEBUG` | `0` | Enable debug mode (dev only) |
+| `PYTHONUNBUFFERED` | `1` | Python output buffering |
 
 ## Contributing
 
