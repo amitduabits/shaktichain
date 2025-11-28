@@ -9,7 +9,7 @@ from pathlib import Path
 from contextlib import asynccontextmanager
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Depends
 from fastapi.middleware.cors import CORSMiddleware
 
 # Add parent directory to path for imports
@@ -25,6 +25,7 @@ from api.schemas import (
     PriceCreate,
     PriceResponse,
 )
+from api.auth import router as auth_router, get_current_user
 
 # Database instance
 db: Optional[Database] = None
@@ -58,6 +59,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Include auth router
+app.include_router(auth_router)
+
 
 @app.get("/health")
 async def health_check():
@@ -69,8 +73,11 @@ async def health_check():
 
 
 @app.post("/simulations", response_model=SimulationResponse)
-async def create_simulation(sim: SimulationCreate):
-    """Create a new simulation."""
+async def create_simulation(
+    sim: SimulationCreate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Create a new simulation. Requires authentication."""
     sim_id = db.save_simulation({
         "n_agents": sim.n_agents,
         "n_days": sim.n_days,
@@ -80,14 +87,20 @@ async def create_simulation(sim: SimulationCreate):
 
 
 @app.get("/simulations", response_model=list[SimulationResponse])
-async def list_simulations(limit: int = Query(50, ge=1, le=100)):
-    """List recent simulations."""
+async def list_simulations(
+    limit: int = Query(50, ge=1, le=100),
+    current_user: dict = Depends(get_current_user)
+):
+    """List recent simulations. Requires authentication."""
     return db.list_simulations(limit=limit)
 
 
 @app.get("/simulations/{sim_id}", response_model=SimulationResponse)
-async def get_simulation(sim_id: str):
-    """Get a simulation by ID."""
+async def get_simulation(
+    sim_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get a simulation by ID. Requires authentication."""
     result = db.get_simulation(sim_id)
     if result is None:
         raise HTTPException(status_code=404, detail="Simulation not found")
@@ -95,8 +108,12 @@ async def get_simulation(sim_id: str):
 
 
 @app.patch("/simulations/{sim_id}", response_model=SimulationResponse)
-async def update_simulation(sim_id: str, updates: SimulationUpdate):
-    """Update a simulation."""
+async def update_simulation(
+    sim_id: str,
+    updates: SimulationUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Update a simulation. Requires authentication."""
     # Check if simulation exists
     existing = db.get_simulation(sim_id)
     if existing is None:
@@ -114,8 +131,11 @@ async def update_simulation(sim_id: str, updates: SimulationUpdate):
 
 
 @app.post("/periods", response_model=PeriodResponse)
-async def create_period(period: PeriodCreate):
-    """Create a market period record."""
+async def create_period(
+    period: PeriodCreate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Create a market period record. Requires authentication."""
     # Verify simulation exists
     sim = db.get_simulation(period.simulation_id)
     if sim is None:
@@ -131,8 +151,11 @@ async def create_period(period: PeriodCreate):
 
 
 @app.get("/simulations/{sim_id}/periods", response_model=list[PeriodResponse])
-async def get_simulation_periods(sim_id: str):
-    """Get all periods for a simulation."""
+async def get_simulation_periods(
+    sim_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get all periods for a simulation. Requires authentication."""
     # Verify simulation exists
     sim = db.get_simulation(sim_id)
     if sim is None:

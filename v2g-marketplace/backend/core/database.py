@@ -84,6 +84,17 @@ class Database:
             )
         """)
 
+        # Create users table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY,
+                email TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                role TEXT DEFAULT 'user' CHECK(role IN ('user', 'admin')),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
         # Create indexes for better query performance
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_market_periods_simulation
@@ -92,6 +103,10 @@ class Database:
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_price_history_timestamp
             ON price_history(timestamp DESC)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_users_email
+            ON users(email)
         """)
 
         conn.commit()
@@ -307,6 +322,84 @@ class Database:
         """, (limit,))
 
         return [dict(row) for row in cursor.fetchall()]
+
+    def create_user(self, user_data: dict) -> str:
+        """
+        Create a new user.
+
+        Args:
+            user_data: Dictionary with user data.
+                Required: email, password_hash
+                Optional: id, role
+
+        Returns:
+            The user ID.
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        user_id = user_data.get("id", str(uuid.uuid4()))
+        email = user_data["email"]
+        password_hash = user_data["password_hash"]
+        role = user_data.get("role", "user")
+
+        cursor.execute("""
+            INSERT INTO users (id, email, password_hash, role)
+            VALUES (?, ?, ?, ?)
+        """, (user_id, email, password_hash, role))
+
+        conn.commit()
+        return user_id
+
+    def get_user_by_email(self, email: str) -> Optional[dict]:
+        """
+        Get a user by email.
+
+        Args:
+            email: User email.
+
+        Returns:
+            User data as dictionary or None if not found.
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT id, email, password_hash, role, created_at
+            FROM users
+            WHERE email = ?
+        """, (email,))
+
+        row = cursor.fetchone()
+        if row is None:
+            return None
+
+        return dict(row)
+
+    def get_user_by_id(self, user_id: str) -> Optional[dict]:
+        """
+        Get a user by ID.
+
+        Args:
+            user_id: User ID.
+
+        Returns:
+            User data as dictionary or None if not found.
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT id, email, password_hash, role, created_at
+            FROM users
+            WHERE id = ?
+        """, (user_id,))
+
+        row = cursor.fetchone()
+        if row is None:
+            return None
+
+        return dict(row)
 
 
 # Singleton instance for convenience
