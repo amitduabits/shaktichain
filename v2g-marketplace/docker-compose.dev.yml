@@ -1,0 +1,49 @@
+version: '3.8'
+
+# Development configuration with hot reload
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: v2g-backend-dev
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount source code for hot reload
+      - ./backend:/app
+      - ./data:/app/data
+      # Exclude virtual environment
+      - /app/__pycache__
+    environment:
+      - DATABASE_URL=sqlite:///data/v2g.db
+      - PYTHONUNBUFFERED=1
+      - DEBUG=1
+    # Override CMD for development with reload
+    command: ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    restart: unless-stopped
+    networks:
+      - v2g-network-dev
+
+  frontend:
+    image: node:18-alpine
+    container_name: v2g-frontend-dev
+    working_dir: /app
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - VITE_API_URL=http://localhost:8000
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - v2g-network-dev
+
+networks:
+  v2g-network-dev:
+    driver: bridge
