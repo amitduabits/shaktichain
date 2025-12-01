@@ -1,0 +1,28 @@
+{
+  "name": "shakti-chain-subgraph",
+  "version": "1.0.0",
+  "description": "The Graph subgraph for SHAKTI-CHAIN V2G Energy Trading Platform",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shakti-chain/subgraph"
+  },
+  "scripts": {
+    "codegen": "graph codegen",
+    "build": "graph build",
+    "deploy": "graph deploy --node https://api.studio.thegraph.com/deploy/ shakti-chain/shakti-chain",
+    "deploy:hosted": "graph deploy --product hosted-service shakti-chain/shakti-chain",
+    "deploy:local": "graph deploy --node http://localhost:8020/ --ipfs http://localhost:5001 shakti-chain/shakti-chain",
+    "create-local": "graph create --node http://localhost:8020/ shakti-chain/shakti-chain",
+    "remove-local": "graph remove --node http://localhost:8020/ shakti-chain/shakti-chain",
+    "test": "graph test",
+    "test:coverage": "graph test --coverage"
+  },
+  "dependencies": {
+    "@graphprotocol/graph-cli": "^0.71.0",
+    "@graphprotocol/graph-ts": "^0.32.0"
+  },
+  "devDependencies": {
+    "matchstick-as": "^0.6.0"
+  }
+}

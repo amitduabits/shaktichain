@@ -2,11 +2,14 @@ import { useState, useEffect } from 'react';
 import PriceChart from './PriceChart';
 import SimulationPanel from './SimulationPanel';
 import { getCurrentPrice } from '../services/api';
+import { useAppMode } from '../providers/Web3Provider';
+import { TokenBalance, StakingPanel, BidForm } from './web3';
 
 function Dashboard() {
   const [currentPrice, setCurrentPrice] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const { isLiveMode, isSimulationMode } = useAppMode();
 
   useEffect(() => {
     const fetchPrice = async () => {
@@ -50,6 +53,38 @@ function Dashboard() {
         <div className="dashboard-card">
           <h3>Run Simulation</h3>
           <SimulationPanel />
+        </div>
+
+        {/* Web3 Components - shown alongside simulation */}
+        <div className="dashboard-card">
+          <h3>Your Balance</h3>
+          <TokenBalance
+            variant="detailed"
+            showVotingPower
+            showTotalSupply
+            simulatedBalance="1,500.00"
+          />
+        </div>
+
+        <div className="dashboard-card wide">
+          <BidForm
+            simulatedData={{
+              currentRound: 42,
+              timeRemaining: 300,
+              isOpen: true
+            }}
+          />
+        </div>
+
+        <div className="dashboard-card wide">
+          <StakingPanel
+            simulatedData={{
+              stakedAmount: '500.00',
+              pendingRewards: '12.50',
+              apr: 12.5,
+              totalStaked: '5,000,000'
+            }}
+          />
         </div>
       </div>
 

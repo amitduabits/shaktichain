@@ -52,6 +52,7 @@ from api.schemas import (
 )
 from api.auth import router as auth_router, get_current_user
 from api.simulation_service import get_simulation_service
+from api.routes.blockchain import router as blockchain_router
 
 # Database instance
 db: Optional[Database] = None
@@ -175,6 +176,9 @@ app.add_middleware(
 
 # Include auth router
 app.include_router(auth_router)
+
+# Include blockchain router
+app.include_router(blockchain_router)
 
 
 # === Health Check Endpoints ===

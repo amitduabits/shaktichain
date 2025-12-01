@@ -890,6 +890,23 @@
   animation: spin 1s linear infinite;
 }
 
+/* Web3 Wallet in Header */
+.web3-wallet {
+  display: flex;
+  align-items: center;
+}
+
+/* Dashboard Card Wide */
+.dashboard-card.wide {
+  grid-column: span 2;
+}
+
+@media (max-width: 900px) {
+  .dashboard-card.wide {
+    grid-column: span 1;
+  }
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .app-header {

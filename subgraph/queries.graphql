@@ -1,0 +1,629 @@
+# ============================================================
+# SHAKTI-CHAIN GraphQL Queries
+# Example queries for frontend integration
+# ============================================================
+
+# ============ Recent Trades with Pagination ============
+
+# Get recent trades with buyer/seller details
+query RecentTrades($first: Int!, $skip: Int!, $orderBy: Trade_orderBy, $orderDirection: OrderDirection) {
+  trades(
+    first: $first
+    skip: $skip
+    orderBy: $orderBy
+    orderDirection: $orderDirection
+  ) {
+    id
+    tradeId
+    buyer {
+      id
+      address
+      reputation
+      tier
+    }
+    seller {
+      id
+      address
+      reputation
+      tier
+    }
+    quantity
+    price
+    totalValue
+    platformFee
+    status
+    deliveryStatus
+    executedAt
+    transactionHash
+    round {
+      roundId
+      clearingPrice
+    }
+  }
+}
+
+# Get trades for a specific round
+query TradesByRound($roundId: String!, $first: Int!, $skip: Int!) {
+  trades(
+    where: { round: $roundId }
+    first: $first
+    skip: $skip
+    orderBy: executedAt
+    orderDirection: desc
+  ) {
+    id
+    buyer {
+      address
+      tier
+    }
+    seller {
+      address
+      tier
+    }
+    quantity
+    price
+    totalValue
+    status
+    executedAt
+  }
+}
+
+# ============ Prosumer Trading History ============
+
+# Get prosumer profile with trading history
+query ProsumerProfile($address: ID!) {
+  prosumer(id: $address) {
+    id
+    address
+    type
+    reputation
+    tier
+    isKYCVerified
+    isFlagged
+    totalTrades
+    successfulTrades
+    failedDeliveries
+    disputesWon
+    disputesLost
+    totalVolume
+    totalValueTraded
+    stakedAmount
+    registeredAt
+    lastActivityAt
+    evs {
+      id
+      vehicleId
+      batteryCapacity
+      totalEnergyProvided
+      totalEnergyConsumed
+      isAvailable
+    }
+  }
+}
+
+# Get prosumer's recent orders
+query ProsumerOrders($address: String!, $first: Int!, $skip: Int!) {
+  orders(
+    where: { trader: $address }
+    first: $first
+    skip: $skip
+    orderBy: submittedAt
+    orderDirection: desc
+  ) {
+    id
+    orderId
+    orderType
+    quantity
+    price
+    totalValue
+    status
+    matchedQuantity
+    matchedPrice
+    submittedAt
+    matchedAt
+    round {
+      roundId
+      state
+      clearingPrice
+    }
+  }
+}
+
+# Get prosumer's buy trades
+query ProsumerBuyTrades($address: String!, $first: Int!, $skip: Int!) {
+  trades(
+    where: { buyer: $address }
+    first: $first
+    skip: $skip
+    orderBy: executedAt
+    orderDirection: desc
+  ) {
+    id
+    seller {
+      address
+      tier
+    }
+    quantity
+    price
+    totalValue
+    status
+    deliveryStatus
+    executedAt
+  }
+}
+
+# Get prosumer's sell trades
+query ProsumerSellTrades($address: String!, $first: Int!, $skip: Int!) {
+  trades(
+    where: { seller: $address }
+    first: $first
+    skip: $skip
+    orderBy: executedAt
+    orderDirection: desc
+  ) {
+    id
+    buyer {
+      address
+      tier
+    }
+    quantity
+    price
+    totalValue
+    platformFee
+    sellerReceived
+    status
+    deliveryStatus
+    executedAt
+  }
+}
+
+# Get prosumer reputation history
+query ProsumerReputationHistory($address: String!, $first: Int!) {
+  reputationChanges(
+    where: { prosumer: $address }
+    first: $first
+    orderBy: timestamp
+    orderDirection: desc
+  ) {
+    id
+    oldScore
+    newScore
+    change
+    reason
+    oldTier
+    newTier
+    tierChanged
+    timestamp
+  }
+}
+
+# ============ Auction Round Details ============
+
+# Get current active auction
+query CurrentAuction {
+  auctionRounds(
+    where: { state: OPEN }
+    first: 1
+    orderBy: roundId
+    orderDirection: desc
+  ) {
+    id
+    roundId
+    startTime
+    endTime
+    duration
+    state
+    totalBidVolume
+    totalAskVolume
+    totalBids
+    totalAsks
+    createdAt
+  }
+}
+
+# Get auction round details
+query AuctionRoundDetails($roundId: ID!) {
+  auctionRound(id: $roundId) {
+    id
+    roundId
+    startTime
+    endTime
+    duration
+    state
+    totalBidVolume
+    totalAskVolume
+    totalBidValue
+    totalAskValue
+    totalBids
+    totalAsks
+    matchedOrders
+    clearingPrice
+    clearedVolume
+    createdAt
+    clearedAt
+    settledAt
+    orders(first: 100, orderBy: submittedAt, orderDirection: desc) {
+      id
+      orderType
+      quantity
+      price
+      status
+      trader {
+        address
+        tier
+      }
+    }
+    trades(first: 100, orderBy: executedAt, orderDirection: desc) {
+      id
+      quantity
+      price
+      buyer {
+        address
+      }
+      seller {
+        address
+      }
+    }
+  }
+}
+
+# Get recent auction rounds
+query RecentAuctionRounds($first: Int!, $skip: Int!) {
+  auctionRounds(
+    first: $first
+    skip: $skip
+    orderBy: roundId
+    orderDirection: desc
+  ) {
+    id
+    roundId
+    startTime
+    endTime
+    state
+    totalBidVolume
+    totalAskVolume
+    clearingPrice
+    matchedOrders
+    clearedVolume
+    createdAt
+  }
+}
+
+# ============ Price History for Charts ============
+
+# Hourly price candles (24 hours)
+query HourlyPriceHistory($hours: Int!) {
+  priceCandles(
+    where: { period: 3600 }
+    first: $hours
+    orderBy: timestamp
+    orderDirection: desc
+  ) {
+    id
+    timestamp
+    open
+    high
+    low
+    close
+    volume
+    trades
+  }
+}
+
+# Daily price candles (30 days)
+query DailyPriceHistory($days: Int!) {
+  priceCandles(
+    where: { period: 86400 }
+    first: $days
+    orderBy: timestamp
+    orderDirection: desc
+  ) {
+    id
+    timestamp
+    open
+    high
+    low
+    close
+    volume
+    trades
+  }
+}
+
+# Hourly stats for detailed charts
+query HourlyStats($hours: Int!) {
+  hourlyStats_collection(
+    first: $hours
+    orderBy: timestamp
+    orderDirection: desc
+  ) {
+    id
+    timestamp
+    hour
+    volume
+    valueTraded
+    trades
+    averagePrice
+    highPrice
+    lowPrice
+  }
+}
+
+# Daily stats for dashboard
+query DailyStats($days: Int!) {
+  dailyStats_collection(
+    first: $days
+    orderBy: date
+    orderDirection: desc
+  ) {
+    id
+    date
+    totalVolume
+    totalValueTraded
+    totalTrades
+    successfulTrades
+    failedTrades
+    disputedTrades
+    averagePrice
+    highPrice
+    lowPrice
+    uniqueTraders
+    newProsumers
+    activeEVs
+    totalFees
+    totalBurned
+    totalStaked
+    stakingRewards
+    auctionRounds
+    averageClearingPrice
+  }
+}
+
+# ============ Leaderboard Queries ============
+
+# Top traders by volume
+query LeaderboardByVolume($first: Int!, $period: String!) {
+  prosumers(
+    first: $first
+    orderBy: totalVolume
+    orderDirection: desc
+  ) {
+    id
+    address
+    totalVolume
+    totalValueTraded
+    totalTrades
+    reputation
+    tier
+    isKYCVerified
+  }
+}
+
+# Top traders by trade count
+query LeaderboardByTrades($first: Int!) {
+  prosumers(
+    first: $first
+    orderBy: totalTrades
+    orderDirection: desc
+  ) {
+    id
+    address
+    totalTrades
+    successfulTrades
+    totalVolume
+    reputation
+    tier
+  }
+}
+
+# Top traders by reputation
+query LeaderboardByReputation($first: Int!) {
+  prosumers(
+    first: $first
+    orderBy: reputation
+    orderDirection: desc
+    where: { reputation_gt: 0 }
+  ) {
+    id
+    address
+    reputation
+    tier
+    totalTrades
+    successfulTrades
+    totalVolume
+    isKYCVerified
+  }
+}
+
+# Top EV providers
+query TopEVProviders($first: Int!) {
+  evs(
+    first: $first
+    orderBy: totalEnergyProvided
+    orderDirection: desc
+    where: { isRegistered: true }
+  ) {
+    id
+    vehicleId
+    owner {
+      address
+      reputation
+      tier
+    }
+    batteryCapacity
+    totalEnergyProvided
+    totalEnergyConsumed
+    totalEarnings
+  }
+}
+
+# ============ Protocol Overview ============
+
+query ProtocolStats {
+  protocol(id: "shakti-chain") {
+    totalSupply
+    circulatingSupply
+    totalBurned
+    totalVolume
+    totalValueTraded
+    totalTrades
+    totalFees
+    totalProsumers
+    totalEVs
+    activeProsumers
+    totalStaked
+    totalStakers
+    totalAuctionRounds
+    currentRoundId
+    lastUpdatedAt
+  }
+}
+
+# ============ Settlements & Disputes ============
+
+# Get settlements for a prosumer
+query ProsumerSettlements($address: String!, $first: Int!) {
+  settlements(
+    where: { participant: $address }
+    first: $first
+    orderBy: createdAt
+    orderDirection: desc
+  ) {
+    id
+    settlementId
+    buyer {
+      address
+    }
+    seller {
+      address
+    }
+    quantity
+    price
+    totalAmount
+    platformFee
+    sellerPayout
+    status
+    disputeOutcome
+    createdAt
+    disputeDeadline
+    completedAt
+  }
+}
+
+# Get active disputes
+query ActiveDisputes($first: Int!) {
+  disputes(
+    where: { resolved: false }
+    first: $first
+    orderBy: raisedAt
+    orderDirection: desc
+  ) {
+    id
+    settlement {
+      settlementId
+      buyer {
+        address
+      }
+      seller {
+        address
+      }
+      totalAmount
+    }
+    raisedBy {
+      address
+    }
+    reason
+    raisedAt
+  }
+}
+
+# ============ Staking Queries ============
+
+# Get staker info
+query StakerInfo($address: ID!) {
+  stake(id: $address) {
+    id
+    staker {
+      address
+      reputation
+    }
+    amount
+    shares
+    pendingRewards
+    totalRewardsClaimed
+    stakedAt
+    lastClaimAt
+    isLocked
+    lockEndTime
+  }
+}
+
+# Get staking pool snapshots
+query StakingHistory($first: Int!) {
+  stakingPoolSnapshots(
+    first: $first
+    orderBy: timestamp
+    orderDirection: desc
+  ) {
+    id
+    timestamp
+    totalStaked
+    totalShares
+    rewardRate
+    totalRewardsDistributed
+    stakerCount
+    apr
+  }
+}
+
+# ============ Token Queries ============
+
+# Get token holder info
+query TokenHolderInfo($address: ID!) {
+  tokenHolder(id: $address) {
+    id
+    address
+    balance
+    lockedBalance
+    delegatedTo
+    votingPower
+    totalTransferred
+    totalReceived
+    totalBurned
+    firstSeenAt
+    lastActivityAt
+  }
+}
+
+# Get recent transfers
+query RecentTransfers($first: Int!) {
+  transfers(
+    first: $first
+    orderBy: timestamp
+    orderDirection: desc
+  ) {
+    id
+    from {
+      address
+    }
+    to {
+      address
+    }
+    amount
+    timestamp
+    transactionHash
+  }
+}
+
+# Top token holders
+query TopTokenHolders($first: Int!) {
+  tokenHolders(
+    first: $first
+    orderBy: balance
+    orderDirection: desc
+  ) {
+    id
+    address
+    balance
+    votingPower
+  }
+}

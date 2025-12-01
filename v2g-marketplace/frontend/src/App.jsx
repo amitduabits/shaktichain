@@ -3,6 +3,8 @@ import Dashboard from './components/Dashboard';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { Web3Provider, useAppMode } from './providers/Web3Provider';
+import { ConnectWallet, TransactionStatus } from './components/web3';
 import { getHealth } from './services/api';
 import './App.css';
 
@@ -58,6 +60,9 @@ function AppContent() {
                 {apiStatus === 'disconnected' && 'API Offline'}
               </span>
             </div>
+            <div className="web3-wallet">
+              <ConnectWallet compact />
+            </div>
             <div className="user-menu">
               <span className="user-email">{user?.email}</span>
               <button className="logout-button" onClick={logout}>
@@ -78,15 +83,20 @@ function AppContent() {
           <span className="footer-version">v{APP_VERSION}</span>
         </div>
       </footer>
+
+      {/* Transaction notifications */}
+      <TransactionStatus />
     </div>
   );
 }
 
 function App() {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <Web3Provider defaultMode="simulation" theme="dark">
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </Web3Provider>
   );
 }
 

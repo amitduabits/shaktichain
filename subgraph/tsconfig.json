@@ -1,0 +1,10 @@
+{
+  "extends": "@graphprotocol/graph-ts/types/tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./build",
+    "rootDir": ".",
+    "lib": ["ESNext"],
+    "types": ["@graphprotocol/graph-ts"]
+  },
+  "include": ["src/**/*.ts", "tests/**/*.ts"]
+}

@@ -1,0 +1,567 @@
+# ============================================================
+# SHAKTI-CHAIN Subgraph Schema
+# The Graph Protocol - Indexing for V2G Energy Trading Platform
+# ============================================================
+
+# ============ Enums ============
+
+enum ProsumerType {
+  EV_OWNER
+  CHARGING_STATION
+  GRID_OPERATOR
+  SOLAR_PRODUCER
+  BATTERY_STORAGE
+}
+
+enum Tier {
+  BRONZE
+  SILVER
+  GOLD
+  PLATINUM
+  DIAMOND
+}
+
+enum AuctionState {
+  OPEN
+  CLOSED
+  CLEARING
+  SETTLED
+}
+
+enum OrderType {
+  BID
+  ASK
+}
+
+enum OrderStatus {
+  ACTIVE
+  MATCHED
+  CANCELLED
+  EXPIRED
+}
+
+enum TradeStatus {
+  PENDING
+  SETTLED
+  DISPUTED
+  RESOLVED
+  REFUNDED
+}
+
+enum DeliveryStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  PARTIAL
+}
+
+enum DisputeOutcome {
+  NONE
+  BUYER_WINS
+  SELLER_WINS
+  SPLIT
+}
+
+# ============ Core Entities ============
+
+"""
+Prosumer entity representing energy market participants
+"""
+type Prosumer @entity {
+  id: ID!
+  address: Bytes!
+  type: ProsumerType!
+
+  # Reputation
+  reputation: Int!
+  tier: Tier!
+  isKYCVerified: Boolean!
+  isFlagged: Boolean!
+
+  # Trading stats
+  totalTrades: BigInt!
+  successfulTrades: BigInt!
+  failedDeliveries: BigInt!
+  disputesWon: BigInt!
+  disputesLost: BigInt!
+  totalVolume: BigDecimal!
+  totalValueTraded: BigDecimal!
+
+  # Staking
+  stakedAmount: BigDecimal!
+
+  # Timestamps
+  registeredAt: BigInt!
+  lastActivityAt: BigInt!
+
+  # Relations
+  evs: [EV!]! @derivedFrom(field: "owner")
+  bids: [Order!]! @derivedFrom(field: "trader")
+  stakes: [Stake!]! @derivedFrom(field: "staker")
+  buyTrades: [Trade!]! @derivedFrom(field: "buyer")
+  sellTrades: [Trade!]! @derivedFrom(field: "seller")
+  settlements: [Settlement!]! @derivedFrom(field: "participant")
+  reputationHistory: [ReputationChange!]! @derivedFrom(field: "prosumer")
+}
+
+"""
+Electric Vehicle entity for V2G participants
+"""
+type EV @entity {
+  id: ID!
+  vehicleId: String!
+  owner: Prosumer!
+
+  # Vehicle specs
+  batteryCapacity: BigInt!
+  maxChargingRate: BigInt!
+  maxDischargingRate: BigInt!
+
+  # Current state
+  currentSoC: BigInt!
+  isAvailable: Boolean!
+  isRegistered: Boolean!
+
+  # Stats
+  totalEnergyProvided: BigDecimal!
+  totalEnergyConsumed: BigDecimal!
+  totalEarnings: BigDecimal!
+
+  # Timestamps
+  registeredAt: BigInt!
+  lastUpdatedAt: BigInt!
+}
+
+"""
+Auction round entity
+"""
+type AuctionRound @entity {
+  id: ID!
+  roundId: BigInt!
+
+  # Timing
+  startTime: BigInt!
+  endTime: BigInt!
+  duration: BigInt!
+
+  # State
+  state: AuctionState!
+
+  # Volumes
+  totalBidVolume: BigDecimal!
+  totalAskVolume: BigDecimal!
+  totalBidValue: BigDecimal!
+  totalAskValue: BigDecimal!
+
+  # Order counts
+  totalBids: Int!
+  totalAsks: Int!
+  matchedOrders: Int!
+
+  # Clearing
+  clearingPrice: BigDecimal
+  clearedVolume: BigDecimal
+
+  # Relations
+  orders: [Order!]! @derivedFrom(field: "round")
+  trades: [Trade!]! @derivedFrom(field: "round")
+
+  # Timestamps
+  createdAt: BigInt!
+  clearedAt: BigInt
+  settledAt: BigInt
+}
+
+"""
+Order entity (bids and asks)
+"""
+type Order @entity {
+  id: ID!
+  orderId: BigInt!
+  round: AuctionRound!
+  trader: Prosumer!
+
+  # Order details
+  orderType: OrderType!
+  quantity: BigDecimal!
+  price: BigDecimal!
+  totalValue: BigDecimal!
+
+  # Status
+  status: OrderStatus!
+  matchedQuantity: BigDecimal!
+  matchedPrice: BigDecimal
+
+  # Timestamps
+  submittedAt: BigInt!
+  matchedAt: BigInt
+  cancelledAt: BigInt
+
+  # Transaction
+  transactionHash: Bytes!
+}
+
+"""
+Trade entity - matched orders
+"""
+type Trade @entity {
+  id: ID!
+  tradeId: BigInt!
+  round: AuctionRound!
+
+  # Parties
+  buyer: Prosumer!
+  seller: Prosumer!
+  buyOrder: Order
+  sellOrder: Order
+
+  # Trade details
+  quantity: BigDecimal!
+  price: BigDecimal!
+  totalValue: BigDecimal!
+
+  # Fees
+  platformFee: BigDecimal!
+  burnedAmount: BigDecimal!
+  sellerReceived: BigDecimal!
+
+  # Status
+  status: TradeStatus!
+  deliveryStatus: DeliveryStatus
+
+  # Settlement
+  settlement: Settlement
+
+  # Timestamps
+  executedAt: BigInt!
+  settledAt: BigInt
+
+  # Transaction
+  transactionHash: Bytes!
+}
+
+"""
+Settlement entity for escrow
+"""
+type Settlement @entity {
+  id: ID!
+  settlementId: BigInt!
+
+  # Related trade
+  trade: Trade
+  round: AuctionRound!
+
+  # Parties
+  participant: Prosumer!
+  buyer: Prosumer!
+  seller: Prosumer!
+
+  # Amounts
+  quantity: BigDecimal!
+  price: BigDecimal!
+  totalAmount: BigDecimal!
+  platformFee: BigDecimal!
+  burnAmount: BigDecimal!
+  sellerPayout: BigDecimal!
+
+  # Status
+  status: TradeStatus!
+  disputeOutcome: DisputeOutcome
+
+  # Dispute
+  dispute: Dispute
+
+  # Timing
+  createdAt: BigInt!
+  disputeDeadline: BigInt!
+  completedAt: BigInt
+
+  # Transaction
+  transactionHash: Bytes!
+}
+
+"""
+Dispute entity
+"""
+type Dispute @entity {
+  id: ID!
+  settlement: Settlement!
+
+  # Dispute details
+  raisedBy: Prosumer!
+  reason: String!
+
+  # Resolution
+  resolved: Boolean!
+  outcome: DisputeOutcome
+  resolution: String
+  arbiter: Bytes
+
+  # Amounts
+  buyerRefund: BigDecimal
+  sellerPayout: BigDecimal
+
+  # Timestamps
+  raisedAt: BigInt!
+  resolvedAt: BigInt
+
+  # Transaction
+  transactionHash: Bytes!
+}
+
+# ============ Token & Staking Entities ============
+
+"""
+SHAKTI Token holder
+"""
+type TokenHolder @entity {
+  id: ID!
+  address: Bytes!
+
+  # Balances
+  balance: BigDecimal!
+  lockedBalance: BigDecimal!
+
+  # Governance
+  delegatedTo: Bytes
+  votingPower: BigDecimal!
+
+  # Activity
+  totalTransferred: BigDecimal!
+  totalReceived: BigDecimal!
+  totalBurned: BigDecimal!
+
+  # Timestamps
+  firstSeenAt: BigInt!
+  lastActivityAt: BigInt!
+
+  # Relations
+  transfers: [Transfer!]! @derivedFrom(field: "from")
+  received: [Transfer!]! @derivedFrom(field: "to")
+}
+
+"""
+Token transfer event
+"""
+type Transfer @entity {
+  id: ID!
+  from: TokenHolder!
+  to: TokenHolder!
+  amount: BigDecimal!
+  timestamp: BigInt!
+  blockNumber: BigInt!
+  transactionHash: Bytes!
+}
+
+"""
+Stake entity
+"""
+type Stake @entity {
+  id: ID!
+  staker: Prosumer!
+
+  # Amounts
+  amount: BigDecimal!
+  shares: BigDecimal!
+
+  # Rewards
+  pendingRewards: BigDecimal!
+  totalRewardsClaimed: BigDecimal!
+
+  # Timing
+  stakedAt: BigInt!
+  lastClaimAt: BigInt
+
+  # Lock
+  lockEndTime: BigInt
+  isLocked: Boolean!
+}
+
+"""
+Staking pool snapshot
+"""
+type StakingPoolSnapshot @entity {
+  id: ID!
+  timestamp: BigInt!
+  blockNumber: BigInt!
+
+  totalStaked: BigDecimal!
+  totalShares: BigDecimal!
+  rewardRate: BigDecimal!
+  totalRewardsDistributed: BigDecimal!
+
+  stakerCount: Int!
+  apr: BigDecimal!
+}
+
+# ============ Reputation Entities ============
+
+"""
+Reputation change event
+"""
+type ReputationChange @entity {
+  id: ID!
+  prosumer: Prosumer!
+
+  oldScore: Int!
+  newScore: Int!
+  change: Int!
+  reason: String!
+
+  # Tier change
+  oldTier: Tier
+  newTier: Tier
+  tierChanged: Boolean!
+
+  timestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+# ============ Analytics Entities ============
+
+"""
+Daily statistics aggregation
+"""
+type DailyStats @entity {
+  id: ID!
+  date: Int!
+
+  # Volume
+  totalVolume: BigDecimal!
+  totalValueTraded: BigDecimal!
+
+  # Trades
+  totalTrades: Int!
+  successfulTrades: Int!
+  failedTrades: Int!
+  disputedTrades: Int!
+
+  # Pricing
+  averagePrice: BigDecimal!
+  highPrice: BigDecimal!
+  lowPrice: BigDecimal!
+  openPrice: BigDecimal
+  closePrice: BigDecimal
+
+  # Users
+  uniqueTraders: Int!
+  newProsumers: Int!
+  activeEVs: Int!
+
+  # Fees
+  totalFees: BigDecimal!
+  totalBurned: BigDecimal!
+
+  # Staking
+  totalStaked: BigDecimal!
+  stakingRewards: BigDecimal!
+
+  # Auction
+  auctionRounds: Int!
+  averageClearingPrice: BigDecimal
+}
+
+"""
+Hourly statistics for detailed charts
+"""
+type HourlyStats @entity {
+  id: ID!
+  timestamp: BigInt!
+  hour: Int!
+
+  volume: BigDecimal!
+  valueTraded: BigDecimal!
+  trades: Int!
+  averagePrice: BigDecimal!
+  highPrice: BigDecimal!
+  lowPrice: BigDecimal!
+}
+
+"""
+Price history for charting
+"""
+type PriceCandle @entity {
+  id: ID!
+  timestamp: BigInt!
+  period: Int! # In seconds (3600 = hourly, 86400 = daily)
+
+  open: BigDecimal!
+  high: BigDecimal!
+  low: BigDecimal!
+  close: BigDecimal!
+  volume: BigDecimal!
+  trades: Int!
+}
+
+"""
+Leaderboard entry
+"""
+type LeaderboardEntry @entity {
+  id: ID!
+  prosumer: Prosumer!
+
+  # Rankings
+  volumeRank: Int!
+  tradeCountRank: Int!
+  reputationRank: Int!
+
+  # Metrics (for the period)
+  periodVolume: BigDecimal!
+  periodTrades: Int!
+  periodEarnings: BigDecimal!
+
+  # Period
+  period: String! # "daily", "weekly", "monthly", "all-time"
+  periodStart: BigInt!
+  periodEnd: BigInt!
+
+  updatedAt: BigInt!
+}
+
+# ============ Protocol Entities ============
+
+"""
+Protocol-wide statistics
+"""
+type Protocol @entity {
+  id: ID!
+
+  # Token
+  totalSupply: BigDecimal!
+  circulatingSupply: BigDecimal!
+  totalBurned: BigDecimal!
+
+  # Trading
+  totalVolume: BigDecimal!
+  totalValueTraded: BigDecimal!
+  totalTrades: BigInt!
+  totalFees: BigDecimal!
+
+  # Users
+  totalProsumers: Int!
+  totalEVs: Int!
+  activeProsumers: Int!
+
+  # Staking
+  totalStaked: BigDecimal!
+  totalStakers: Int!
+
+  # Auctions
+  totalAuctionRounds: Int!
+  currentRoundId: BigInt
+
+  # Timestamps
+  lastUpdatedAt: BigInt!
+}
+
+"""
+Contract addresses for reference
+"""
+type Contract @entity {
+  id: ID!
+  name: String!
+  address: Bytes!
+  deployedAt: BigInt!
+  version: String
+}

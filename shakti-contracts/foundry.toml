@@ -1,0 +1,53 @@
+# Foundry Configuration for SHAKTI-CHAIN Security Testing
+
+[profile.default]
+src = "contracts"
+out = "foundry-out"
+libs = ["node_modules"]
+solc = "0.8.24"
+optimizer = true
+optimizer_runs = 200
+via_ir = true
+evm_version = "cancun"
+
+# Remappings for OpenZeppelin
+remappings = [
+    "@openzeppelin/contracts/=node_modules/@openzeppelin/contracts/",
+    "@openzeppelin/contracts-upgradeable/=node_modules/@openzeppelin/contracts-upgradeable/",
+]
+
+# Fuzzing configuration
+[fuzz]
+runs = 10000                    # Minimum 10,000 runs as specified
+max_test_rejects = 65536
+seed = "0x1234"
+dictionary_weight = 40
+
+# Invariant testing
+[invariant]
+runs = 256
+depth = 128
+fail_on_revert = false
+call_override = false
+
+# Security-focused gas limits
+[profile.default.rpc_endpoints]
+polygon = "${POLYGON_RPC_URL}"
+polygon_amoy = "${POLYGON_AMOY_RPC_URL}"
+local = "http://127.0.0.1:8545"
+
+# CI/CD configuration
+[profile.ci]
+fuzz = { runs = 10000 }
+invariant = { runs = 512 }
+verbosity = 3
+
+# Quick test configuration
+[profile.quick]
+fuzz = { runs = 256 }
+invariant = { runs = 64 }
+
+# Intensive fuzzing for security review
+[profile.security]
+fuzz = { runs = 50000 }
+invariant = { runs = 1000, depth = 256 }

@@ -1,0 +1,116 @@
+[
+  {
+    "type": "function",
+    "name": "getReputation",
+    "inputs": [{ "name": "account", "type": "address" }],
+    "outputs": [{ "name": "", "type": "uint256" }],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getTier",
+    "inputs": [{ "name": "account", "type": "address" }],
+    "outputs": [{ "name": "", "type": "uint8" }],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getUserInfo",
+    "inputs": [{ "name": "account", "type": "address" }],
+    "outputs": [
+      { "name": "reputation", "type": "uint256" },
+      { "name": "tier", "type": "uint8" },
+      { "name": "totalTrades", "type": "uint256" },
+      { "name": "successfulTrades", "type": "uint256" },
+      { "name": "failedDeliveries", "type": "uint256" },
+      { "name": "disputesWon", "type": "uint256" },
+      { "name": "disputesLost", "type": "uint256" },
+      { "name": "isKYCVerified", "type": "bool" },
+      { "name": "isFlagged", "type": "bool" }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "isRegistered",
+    "inputs": [{ "name": "account", "type": "address" }],
+    "outputs": [{ "name": "", "type": "bool" }],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "isKYCVerified",
+    "inputs": [{ "name": "account", "type": "address" }],
+    "outputs": [{ "name": "", "type": "bool" }],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "register",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "getTierThresholds",
+    "inputs": [],
+    "outputs": [
+      { "name": "bronze", "type": "uint256" },
+      { "name": "silver", "type": "uint256" },
+      { "name": "gold", "type": "uint256" },
+      { "name": "platinum", "type": "uint256" }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getTierDiscount",
+    "inputs": [{ "name": "tier", "type": "uint8" }],
+    "outputs": [{ "name": "", "type": "uint256" }],
+    "stateMutability": "view"
+  },
+  {
+    "type": "event",
+    "name": "UserRegistered",
+    "inputs": [
+      { "name": "user", "type": "address", "indexed": true },
+      { "name": "timestamp", "type": "uint256", "indexed": false }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ReputationUpdated",
+    "inputs": [
+      { "name": "user", "type": "address", "indexed": true },
+      { "name": "oldScore", "type": "uint256", "indexed": false },
+      { "name": "newScore", "type": "uint256", "indexed": false },
+      { "name": "reason", "type": "string", "indexed": false }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "TierChanged",
+    "inputs": [
+      { "name": "user", "type": "address", "indexed": true },
+      { "name": "oldTier", "type": "uint8", "indexed": false },
+      { "name": "newTier", "type": "uint8", "indexed": false }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "KYCVerified",
+    "inputs": [
+      { "name": "user", "type": "address", "indexed": true },
+      { "name": "timestamp", "type": "uint256", "indexed": false }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "UserFlagged",
+    "inputs": [
+      { "name": "user", "type": "address", "indexed": true },
+      { "name": "reason", "type": "string", "indexed": false }
+    ]
+  }
+]
