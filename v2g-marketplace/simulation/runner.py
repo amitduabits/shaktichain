@@ -10,9 +10,13 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Callable
 from enum import Enum
 import random
-
 import sys
-sys.path.insert(0, str(__file__).rsplit("/", 2)[0])
+from pathlib import Path
+
+# Add parent directory to path for imports (works on both Windows and Unix)
+_project_root = Path(__file__).parent.parent
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
 
 from backend.core.demand import IndiaLoadProfile
 from backend.core.token import SHAKTIToken

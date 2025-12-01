@@ -36,7 +36,7 @@ function Dashboard() {
           <span className="price-badge error">Error</span>
         ) : (
           <span className="price-badge">
-            Current Price: ${currentPrice?.price?.toFixed(4) || 'N/A'}/kWh
+            Current Price: ₹{currentPrice?.price?.toFixed(2) || 'N/A'}/kWh
           </span>
         )}
       </div>

@@ -9,20 +9,55 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
+import { getPriceHistory } from '../services/api';
 
 function PriceChart() {
   const [priceData, setPriceData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    // Generate sample price data for demonstration
+    const fetchPriceHistory = async () => {
+      try {
+        const history = await getPriceHistory();
+
+        if (history && history.length > 0) {
+          // Transform API data to chart format
+          const chartData = history.reverse().map((item) => {
+            const date = new Date(item.time);
+            return {
+              time: date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+              price: item.price,
+              // Calculate approximate demand (mock for now)
+              demand: 50 + (item.price - 6) * 10,
+            };
+          });
+          setPriceData(chartData);
+        } else {
+          // Fallback to sample data if no history
+          const sampleData = generateSampleData();
+          setPriceData(sampleData);
+        }
+        setLoading(false);
+      } catch (err) {
+        console.error('Error fetching price history:', err);
+        // Fallback to sample data on error
+        const sampleData = generateSampleData();
+        setPriceData(sampleData);
+        setError('Using sample data');
+        setLoading(false);
+      }
+    };
+
+    // Generate sample price data for demonstration/fallback
     const generateSampleData = () => {
       const data = [];
       const now = new Date();
       for (let i = 23; i >= 0; i--) {
         const time = new Date(now - i * 60 * 60 * 1000);
-        const basePrice = 0.12;
-        const variation = Math.sin((24 - i) / 24 * Math.PI * 2) * 0.04;
-        const noise = (Math.random() - 0.5) * 0.02;
+        const basePrice = 6.0; // Changed to INR base price
+        const variation = Math.sin((24 - i) / 24 * Math.PI * 2) * 2.0;
+        const noise = (Math.random() - 0.5) * 0.5;
         data.push({
           time: time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
           price: basePrice + variation + noise,
@@ -32,17 +67,24 @@ function PriceChart() {
       return data;
     };
 
-    setPriceData(generateSampleData());
+    fetchPriceHistory();
+    // Refresh every 30 seconds
+    const interval = setInterval(fetchPriceHistory, 30000);
+    return () => clearInterval(interval);
   }, []);
 
-  const formatPrice = (value) => `$${value.toFixed(3)}`;
+  const formatPrice = (value) => `₹${value.toFixed(2)}`;
   const formatDemand = (value) => `${value.toFixed(0)} kW`;
 
   return (
     <div className="price-chart">
-      {priceData.length === 0 ? (
+      {loading ? (
         <div className="chart-placeholder">
-          <p>Loading chart data...</p>
+          <p>Loading price history...</p>
+        </div>
+      ) : priceData.length === 0 ? (
+        <div className="chart-placeholder">
+          <p>No price data available</p>
         </div>
       ) : (
         <ResponsiveContainer width="100%" height={300}>
@@ -74,7 +116,7 @@ function PriceChart() {
               }}
               labelStyle={{ color: '#F3F4F6' }}
               formatter={(value, name) => {
-                if (name === 'price') return [`$${value.toFixed(4)}/kWh`, 'Price'];
+                if (name === 'price') return [`₹${value.toFixed(2)}/kWh`, 'Price'];
                 return [`${value.toFixed(1)} kW`, 'Demand'];
               }}
             />
@@ -86,7 +128,7 @@ function PriceChart() {
               stroke="#10B981"
               strokeWidth={2}
               dot={false}
-              name="Price ($/kWh)"
+              name="Price (₹/kWh)"
             />
             <Line
               yAxisId="right"

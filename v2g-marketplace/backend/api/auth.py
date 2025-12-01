@@ -5,7 +5,9 @@ Provides JWT-based authentication with bcrypt password hashing.
 """
 
 import os
+import sys
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Optional
 
 import bcrypt
@@ -13,6 +15,11 @@ import jwt
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr, Field
+
+# Add backend directory to path for imports (works on both Windows and Unix)
+_backend_dir = Path(__file__).parent.parent
+if str(_backend_dir) not in sys.path:
+    sys.path.insert(0, str(_backend_dir))
 
 from core.database import get_database
 
