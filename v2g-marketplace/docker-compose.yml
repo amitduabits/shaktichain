@@ -8,9 +8,12 @@ services:
       - "8000:8000"
     volumes:
       - ./data:/app/data
+      - ./logs:/app/logs
     environment:
       - DATABASE_URL=sqlite:///data/v2g.db
       - PYTHONUNBUFFERED=1
+      - ENVIRONMENT=production
+      - LOG_LEVEL=INFO
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
@@ -35,10 +38,57 @@ services:
     networks:
       - v2g-network
 
+  prometheus:
+    image: prom/prometheus:v2.47.0
+    container_name: v2g-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+      - '--storage.tsdb.retention.time=15d'
+    restart: unless-stopped
+    depends_on:
+      - backend
+    networks:
+      - v2g-network
+
+  grafana:
+    image: grafana/grafana:10.1.0
+    container_name: v2g-grafana
+    ports:
+      - "3001:3000"
+    volumes:
+      - ./monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=v2g-admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=http://localhost:3001
+      - GF_INSTALL_PLUGINS=
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    networks:
+      - v2g-network
+
 networks:
   v2g-network:
     driver: bridge
 
 volumes:
   v2g-data:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
     driver: local
