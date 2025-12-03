@@ -1,21 +1,17 @@
 # Deployment Guide
 
-Complete guide for deploying V2G Marketplace in development, staging, and production environments.
-
----
+Complete guide for deploying the V2G Marketplace in development, staging, and production environments.
 
 ## Table of Contents
 
 - [Local Development](#local-development)
 - [Docker Deployment](#docker-deployment)
 - [Cloud Deployment](#cloud-deployment)
-  - [AWS](#aws-deployment)
-  - [Google Cloud Platform](#gcp-deployment)
-  - [Microsoft Azure](#azure-deployment)
 - [Environment Variables](#environment-variables)
-- [SSL/HTTPS Setup](#sslhttps-setup)
+- [SSL/HTTPS Setup](#ssl-https-setup)
+- [Database Management](#database-management)
 - [Monitoring & Logging](#monitoring--logging)
-- [Backup & Recovery](#backup--recovery)
+- [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -23,155 +19,204 @@ Complete guide for deploying V2G Marketplace in development, staging, and produc
 
 ### Prerequisites
 
-- Python 3.11+
-- Node.js 18+
-- Git
+- **Python**: 3.9 or higher
+- **Node.js**: 18 or higher
+- **npm**: 9 or higher
+- **Git**: Latest version
+- **Optional**: Docker & Docker Compose
 
 ### Backend Setup
 
 ```bash
-# Navigate to backend directory
-cd v2g-marketplace/backend
+# Clone repository
+git clone <repository-url>
+cd v2g-marketplace
+
+# Navigate to backend
+cd backend
 
 # Create virtual environment
 python -m venv venv
 
 # Activate virtual environment
-source venv/bin/activate  # Linux/macOS
-# OR
-.\venv\Scripts\activate   # Windows
+# On Windows:
+venv\Scripts\activate
+# On macOS/Linux:
+source venv/bin/activate
 
 # Install dependencies
 pip install -r requirements.txt
 
-# Run development server
-uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
+# Create .env file
+cp .env.example .env
+# Edit .env with your configuration
+
+# Initialize database
+python -c "from core.database import init_db; init_db()"
+
+# Run tests
+pytest tests/ -v --cov
+
+# Start development server
+uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-The backend will be available at `http://localhost:8000`
+**Backend will be available at**: http://localhost:8000
 
 ### Frontend Setup
 
 ```bash
-# Navigate to frontend directory
-cd v2g-marketplace/frontend
+# Navigate to frontend (in new terminal)
+cd frontend
 
 # Install dependencies
 npm install
 
-# Run development server
+# Create environment file
+cp .env.example .env.development
+# Edit with backend URL: VITE_API_URL=http://localhost:8000
+
+# Start development server with hot reload
 npm run dev
 ```
 
-The frontend will be available at `http://localhost:5173`
+**Frontend will be available at**: http://localhost:5173
 
-### Running Tests
+### Blockchain Setup (Local)
 
 ```bash
-# Backend tests
-cd backend
-pytest tests/ -v --cov=api --cov=core
+# In separate terminal, start Hardhat node
+cd ../shakti-contracts
+npx hardhat node
 
-# Frontend tests
-cd frontend
-npm test
+# Deploy contracts (in another terminal)
+npx hardhat run scripts/deploy.js --network localhost
 
-# E2E tests
-npm run test:e2e
+# Update backend .env with contract addresses
 ```
 
 ---
 
 ## Docker Deployment
 
-### Quick Start
+Docker provides isolated, reproducible environments for all deployment scenarios.
 
+### Production Deployment
+
+**1. Build and Start**:
 ```bash
-# Clone repository
-git clone https://github.com/amitduabits/shaktichain.git
-cd shaktichain/v2g-marketplace
+# Build images
+docker-compose build
 
-# Build and run
+# Start containers in detached mode
 docker-compose up -d
 
-# View logs
+# Check logs
 docker-compose logs -f
+```
 
-# Stop
+**2. Verify Deployment**:
+```bash
+# Check container status
+docker-compose ps
+
+# Test frontend
+curl http://localhost
+
+# Test backend
+curl http://localhost:8000/health
+
+# Test API docs
+open http://localhost:8000/docs
+```
+
+**3. Stop and Clean**:
+```bash
+# Stop containers
 docker-compose down
+
+# Stop and remove volumes (WARNING: deletes data)
+docker-compose down -v
 ```
 
-### Production Mode
+### Development Deployment (Hot Reload)
 
 ```bash
-# Using helper scripts
-./scripts/docker-build.sh
-./scripts/docker-run.sh
-
-# Or using docker-compose directly
-docker-compose -f docker-compose.yml up -d
-```
-
-**Access:**
-- Frontend: http://localhost
-- Backend API: http://localhost:8000
-- API Docs: http://localhost:8000/docs
-
-### Development Mode (Hot Reload)
-
-```bash
-# Using helper scripts
-./scripts/docker-build.sh --dev
-./scripts/docker-run.sh --dev
-
-# Or using docker-compose directly
+# Start development environment
 docker-compose -f docker-compose.dev.yml up -d
+
+# Watch logs
+docker-compose -f docker-compose.dev.yml logs -f
+
+# Access points:
+# - Frontend: http://localhost:3000
+# - Backend: http://localhost:8000
 ```
 
-**Access:**
-- Frontend: http://localhost:3000 (with hot reload)
-- Backend API: http://localhost:8000 (with auto-reload)
+### Docker Compose Configuration
 
-### Docker Commands Reference
-
-| Command | Description |
-|---------|-------------|
-| `./scripts/docker-build.sh` | Build production images |
-| `./scripts/docker-build.sh --dev` | Build development images |
-| `./scripts/docker-build.sh --no-cache` | Build without cache |
-| `./scripts/docker-run.sh` | Run production containers |
-| `./scripts/docker-run.sh --dev` | Run development containers |
-| `./scripts/docker-run.sh --foreground` | Run in foreground |
-| `./scripts/docker-stop.sh` | Stop production containers |
-| `./scripts/docker-stop.sh --dev` | Stop development containers |
-| `./scripts/docker-stop.sh --volumes` | Stop and remove volumes |
-
-### Docker Compose Files
-
-| File | Purpose |
-|------|---------|
-| `docker-compose.yml` | Production deployment |
-| `docker-compose.dev.yml` | Development with hot reload |
-
-### Container Health Checks
-
-Both containers include health checks:
-
+**Production** (`docker-compose.yml`):
 ```yaml
-# Backend health check
-healthcheck:
-  test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-  interval: 30s
-  timeout: 10s
-  retries: 3
-  start_period: 40s
+version: '3.8'
 
-# Frontend health check
-healthcheck:
-  test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
-  interval: 30s
-  timeout: 10s
-  retries: 3
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite:///data/v2g.db
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  data:
+```
+
+**Development** (`docker-compose.dev.yml`):
+```yaml
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - ./data:/app/data
+    environment:
+      - DEBUG=1
+    command: uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    command: npm run dev -- --host 0.0.0.0
 ```
 
 ---
@@ -180,325 +225,287 @@ healthcheck:
 
 ### AWS Deployment
 
-#### Option 1: EC2 with Docker
+#### Option 1: ECS (Elastic Container Service)
 
-```bash
-# 1. Launch EC2 instance (Ubuntu 22.04, t3.medium recommended)
-# 2. SSH into instance
-ssh -i your-key.pem ubuntu@your-instance-ip
-
-# 3. Install Docker
-sudo apt update
-sudo apt install -y docker.io docker-compose
-sudo usermod -aG docker ubuntu
-newgrp docker
-
-# 4. Clone and deploy
-git clone https://github.com/amitduabits/shaktichain.git
-cd shaktichain/v2g-marketplace
-docker-compose up -d
-
-# 5. Configure security group
-# - Allow inbound: 80 (HTTP), 443 (HTTPS), 22 (SSH)
+**Architecture**:
+```
+Internet -> ALB -> ECS Tasks (Backend + Frontend) -> RDS/SQLite
+                                   |
+                                   v
+                            Blockchain Node
 ```
 
-#### Option 2: ECS with Fargate
+**Setup Steps**:
 
+1. **Prepare ECR (Elastic Container Registry)**:
 ```bash
-# 1. Create ECR repositories
+# Login to ECR
+aws ecr get-login-password --region us-east-1 | \
+  docker login --username AWS --password-stdin <account-id>.dkr.ecr.us-east-1.amazonaws.com
+
+# Create repositories
 aws ecr create-repository --repository-name v2g-backend
 aws ecr create-repository --repository-name v2g-frontend
 
-# 2. Build and push images
-aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $AWS_ACCOUNT.dkr.ecr.us-east-1.amazonaws.com
-
+# Build and push images
 docker build -t v2g-backend ./backend
-docker tag v2g-backend:latest $AWS_ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/v2g-backend:latest
-docker push $AWS_ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/v2g-backend:latest
+docker tag v2g-backend:latest <account-id>.dkr.ecr.us-east-1.amazonaws.com/v2g-backend:latest
+docker push <account-id>.dkr.ecr.us-east-1.amazonaws.com/v2g-backend:latest
 
 docker build -t v2g-frontend ./frontend
-docker tag v2g-frontend:latest $AWS_ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/v2g-frontend:latest
-docker push $AWS_ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/v2g-frontend:latest
-
-# 3. Create ECS cluster, task definitions, and services via AWS Console or Terraform
+docker tag v2g-frontend:latest <account-id>.dkr.ecr.us-east-1.amazonaws.com/v2g-frontend:latest
+docker push <account-id>.dkr.ecr.us-east-1.amazonaws.com/v2g-frontend:latest
 ```
 
-#### Option 3: Elastic Beanstalk
+2. **Create ECS Cluster**:
+```bash
+aws ecs create-cluster --cluster-name v2g-marketplace
+```
+
+3. **Create Task Definition** (`task-definition.json`):
+```json
+{
+  "family": "v2g-marketplace",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "1024",
+  "memory": "2048",
+  "containerDefinitions": [
+    {
+      "name": "backend",
+      "image": "<account-id>.dkr.ecr.us-east-1.amazonaws.com/v2g-backend:latest",
+      "portMappings": [{"containerPort": 8000}],
+      "environment": [
+        {"name": "DATABASE_URL", "value": "sqlite:///data/v2g.db"},
+        {"name": "JWT_SECRET_KEY", "value": "${JWT_SECRET}"}
+      ]
+    },
+    {
+      "name": "frontend",
+      "image": "<account-id>.dkr.ecr.us-east-1.amazonaws.com/v2g-frontend:latest",
+      "portMappings": [{"containerPort": 80}],
+      "dependsOn": [{"containerName": "backend", "condition": "START"}]
+    }
+  ]
+}
+```
+
+4. **Create Service**:
+```bash
+aws ecs create-service \
+  --cluster v2g-marketplace \
+  --service-name v2g-service \
+  --task-definition v2g-marketplace \
+  --desired-count 2 \
+  --launch-type FARGATE \
+  --network-configuration "awsvpcConfiguration={subnets=[subnet-xxx],securityGroups=[sg-xxx],assignPublicIp=ENABLED}"
+```
+
+#### Option 2: EC2 with Docker
 
 ```bash
-# 1. Install EB CLI
-pip install awsebcli
+# Launch EC2 instance (Amazon Linux 2)
+# Install Docker
+sudo yum update -y
+sudo yum install -y docker
+sudo service docker start
+sudo usermod -a -G docker ec2-user
 
-# 2. Initialize Elastic Beanstalk
-eb init -p docker v2g-marketplace
+# Install Docker Compose
+sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+sudo chmod +x /usr/local/bin/docker-compose
 
-# 3. Create environment
-eb create v2g-production
+# Clone repository
+git clone <repository-url>
+cd v2g-marketplace
 
-# 4. Deploy
-eb deploy
-```
+# Configure environment
+cp backend/.env.example backend/.env
+# Edit backend/.env
 
-#### AWS Architecture Diagram
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                        AWS Cloud                             │
-│                                                              │
-│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐      │
-│  │   Route 53  │───▶│ CloudFront  │───▶│     ALB     │      │
-│  │   (DNS)     │    │   (CDN)     │    │             │      │
-│  └─────────────┘    └─────────────┘    └──────┬──────┘      │
-│                                               │              │
-│                     ┌─────────────────────────┼─────┐       │
-│                     │        VPC              │     │       │
-│                     │  ┌──────────────────────┴──┐  │       │
-│                     │  │      ECS Cluster        │  │       │
-│                     │  │  ┌────────┐ ┌────────┐  │  │       │
-│                     │  │  │Backend │ │Frontend│  │  │       │
-│                     │  │  │Fargate │ │Fargate │  │  │       │
-│                     │  │  └───┬────┘ └────────┘  │  │       │
-│                     │  └──────┼──────────────────┘  │       │
-│                     │         │                     │       │
-│                     │  ┌──────▼──────┐              │       │
-│                     │  │    RDS      │              │       │
-│                     │  │  (Optional) │              │       │
-│                     │  └─────────────┘              │       │
-│                     └───────────────────────────────┘       │
-│                                                              │
-│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐      │
-│  │     S3      │    │ CloudWatch  │    │   Secrets   │      │
-│  │  (Storage)  │    │  (Logging)  │    │   Manager   │      │
-│  └─────────────┘    └─────────────┘    └─────────────┘      │
-└─────────────────────────────────────────────────────────────┘
-```
-
----
-
-### GCP Deployment
-
-#### Option 1: Compute Engine with Docker
-
-```bash
-# 1. Create VM instance
-gcloud compute instances create v2g-marketplace \
-  --zone=us-central1-a \
-  --machine-type=e2-medium \
-  --image-family=ubuntu-2204-lts \
-  --image-project=ubuntu-os-cloud \
-  --tags=http-server,https-server
-
-# 2. SSH into instance
-gcloud compute ssh v2g-marketplace
-
-# 3. Install Docker
-sudo apt update
-sudo apt install -y docker.io docker-compose
-sudo usermod -aG docker $USER
-newgrp docker
-
-# 4. Deploy
-git clone https://github.com/amitduabits/shaktichain.git
-cd shaktichain/v2g-marketplace
+# Deploy
 docker-compose up -d
 
-# 5. Create firewall rules
-gcloud compute firewall-rules create allow-http \
-  --allow tcp:80 --target-tags http-server
-gcloud compute firewall-rules create allow-https \
-  --allow tcp:443 --target-tags https-server
+# Configure reverse proxy (Nginx)
+sudo yum install -y nginx
+sudo cp nginx.conf /etc/nginx/nginx.conf
+sudo service nginx start
 ```
 
-#### Option 2: Cloud Run
+### GCP Deployment (Google Cloud Platform)
+
+**Using Cloud Run**:
 
 ```bash
-# 1. Build and push to Container Registry
-gcloud builds submit --tag gcr.io/$PROJECT_ID/v2g-backend ./backend
-gcloud builds submit --tag gcr.io/$PROJECT_ID/v2g-frontend ./frontend
+# Setup gcloud CLI
+gcloud auth login
+gcloud config set project v2g-marketplace
 
-# 2. Deploy backend
+# Build and push to GCR
+gcloud builds submit --tag gcr.io/v2g-marketplace/backend ./backend
+gcloud builds submit --tag gcr.io/v2g-marketplace/frontend ./frontend
+
+# Deploy to Cloud Run
 gcloud run deploy v2g-backend \
-  --image gcr.io/$PROJECT_ID/v2g-backend \
+  --image gcr.io/v2g-marketplace/backend \
   --platform managed \
   --region us-central1 \
-  --allow-unauthenticated
+  --allow-unauthenticated \
+  --set-env-vars DATABASE_URL=sqlite:///data/v2g.db
 
-# 3. Deploy frontend
 gcloud run deploy v2g-frontend \
-  --image gcr.io/$PROJECT_ID/v2g-frontend \
+  --image gcr.io/v2g-marketplace/frontend \
   --platform managed \
   --region us-central1 \
   --allow-unauthenticated
 ```
-
-#### Option 3: Google Kubernetes Engine (GKE)
-
-```bash
-# 1. Create GKE cluster
-gcloud container clusters create v2g-cluster \
-  --zone us-central1-a \
-  --num-nodes 3
-
-# 2. Get credentials
-gcloud container clusters get-credentials v2g-cluster
-
-# 3. Apply Kubernetes manifests
-kubectl apply -f k8s/
-```
-
----
 
 ### Azure Deployment
 
-#### Option 1: Azure VM with Docker
+**Using Azure Container Instances**:
 
 ```bash
-# 1. Create resource group
-az group create --name v2g-rg --location eastus
+# Login to Azure
+az login
 
-# 2. Create VM
-az vm create \
-  --resource-group v2g-rg \
-  --name v2g-vm \
-  --image Ubuntu2204 \
-  --size Standard_B2s \
-  --admin-username azureuser \
-  --generate-ssh-keys
+# Create resource group
+az group create --name v2g-marketplace --location eastus
 
-# 3. Open ports
-az vm open-port --port 80 --resource-group v2g-rg --name v2g-vm
-az vm open-port --port 443 --resource-group v2g-rg --name v2g-vm
+# Create container registry
+az acr create --resource-group v2g-marketplace \
+  --name v2gmarketplace --sku Basic
 
-# 4. SSH and deploy
-ssh azureuser@<public-ip>
-# Follow Docker installation steps from AWS section
-```
+# Build and push images
+az acr build --registry v2gmarketplace --image backend:latest ./backend
+az acr build --registry v2gmarketplace --image frontend:latest ./frontend
 
-#### Option 2: Azure Container Instances
-
-```bash
-# 1. Create Azure Container Registry
-az acr create --resource-group v2g-rg --name v2gacr --sku Basic
-
-# 2. Build and push images
-az acr build --registry v2gacr --image v2g-backend:latest ./backend
-az acr build --registry v2gacr --image v2g-frontend:latest ./frontend
-
-# 3. Deploy container group
+# Deploy container group
 az container create \
-  --resource-group v2g-rg \
+  --resource-group v2g-marketplace \
   --name v2g-containers \
-  --image v2gacr.azurecr.io/v2g-backend:latest \
+  --image v2gmarketplace.azurecr.io/backend:latest \
   --dns-name-label v2g-marketplace \
-  --ports 80 8000
-```
-
-#### Option 3: Azure Kubernetes Service (AKS)
-
-```bash
-# 1. Create AKS cluster
-az aks create \
-  --resource-group v2g-rg \
-  --name v2g-aks \
-  --node-count 2 \
-  --generate-ssh-keys
-
-# 2. Get credentials
-az aks get-credentials --resource-group v2g-rg --name v2g-aks
-
-# 3. Deploy with kubectl
-kubectl apply -f k8s/
+  --ports 8000 80
 ```
 
 ---
 
 ## Environment Variables
 
-### Backend Environment Variables
+### Backend Configuration
 
-| Variable | Default | Description | Required |
-|----------|---------|-------------|----------|
-| `JWT_SECRET` | `v2g-marketplace-secret-key-change-in-production` | JWT signing key | **Yes (production)** |
-| `DATABASE_URL` | `sqlite:///data/v2g.db` | Database connection string | No |
-| `DEBUG` | `0` | Enable debug mode | No |
-| `PYTHONUNBUFFERED` | `1` | Disable Python output buffering | No |
-| `CORS_ORIGINS` | `*` | Allowed CORS origins | No |
-| `LOG_LEVEL` | `INFO` | Logging level | No |
+Create `backend/.env` file:
 
-### Frontend Environment Variables
-
-| Variable | Default | Description | Required |
-|----------|---------|-------------|----------|
-| `VITE_API_URL` | `/api` | Backend API URL | No |
-
-### Setting Environment Variables
-
-#### Docker Compose
-
-```yaml
-# docker-compose.yml
-services:
-  backend:
-    environment:
-      - JWT_SECRET=your-super-secret-key-here
-      - DATABASE_URL=sqlite:///data/v2g.db
-      - LOG_LEVEL=INFO
-```
-
-#### .env File
-
-```bash
-# .env
-JWT_SECRET=your-super-secret-key-here
-DATABASE_URL=sqlite:///data/v2g.db
+```env
+# Application
+ENV=production  # development, staging, production
 DEBUG=0
+LOG_LEVEL=INFO
+
+# Server
+HOST=0.0.0.0
+PORT=8000
+
+# Database
+DATABASE_URL=sqlite:///./data/v2g.db
+# For PostgreSQL:
+# DATABASE_URL=postgresql://user:password@localhost:5432/v2g_marketplace
+
+# JWT Authentication
+JWT_SECRET_KEY=your-256-bit-secret-key-change-in-production
+JWT_ALGORITHM=HS256
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES=1440  # 24 hours
+
+# Blockchain
+BLOCKCHAIN_NETWORK=polygon  # hardhat, polygon_amoy, polygon
+HARDHAT_RPC_URL=http://127.0.0.1:8545
+POLYGON_RPC_URL=https://polygon-rpc.com
+POLYGON_AMOY_RPC_URL=https://rpc-amoy.polygon.technology/
+PRIVATE_KEY=0xYourPrivateKeyHere
+
+# Contract Addresses (after deployment)
+SHAKTI_TOKEN_ADDRESS=0x...
+ENERGY_AUCTION_ADDRESS=0x...
+STAKING_POOL_ADDRESS=0x...
+REPUTATION_SYSTEM_ADDRESS=0x...
+
+# Blockchain Sync
+SYNC_POLL_INTERVAL=12  # seconds
+SYNC_BATCH_SIZE=1000
+SYNC_START_BLOCK=0
+
+# CORS
+CORS_ORIGINS=http://localhost,http://localhost:3000,https://yourdomain.com
+
+# Rate Limiting
+RATE_LIMIT_ENABLED=1
+RATE_LIMIT_PER_MINUTE=100
+
+# Monitoring
+PROMETHEUS_ENABLED=1
+SENTRY_DSN=https://your-sentry-dsn@sentry.io/project-id
 ```
 
-#### Cloud Providers
+### Frontend Configuration
 
-**AWS (Secrets Manager):**
-```bash
-aws secretsmanager create-secret \
-  --name v2g/jwt-secret \
-  --secret-string "your-super-secret-key"
+Create `frontend/.env.production`:
+
+```env
+# API Configuration
+VITE_API_URL=https://api.yourdomain.com
+VITE_WS_URL=wss://api.yourdomain.com/ws
+
+# Blockchain
+VITE_CHAIN_ID=137  # Polygon Mainnet
+VITE_CHAIN_NAME=Polygon
+VITE_RPC_URL=https://polygon-rpc.com
+
+# Contract Addresses
+VITE_SHAKTI_TOKEN_ADDRESS=0x...
+VITE_ENERGY_AUCTION_ADDRESS=0x...
+VITE_STAKING_POOL_ADDRESS=0x...
+
+# Features
+VITE_ENABLE_BLOCKCHAIN=true
+VITE_ENABLE_ANALYTICS=true
+
+# Analytics
+VITE_GA_TRACKING_ID=G-XXXXXXXXXX
 ```
 
-**GCP (Secret Manager):**
-```bash
-echo -n "your-super-secret-key" | \
-  gcloud secrets create jwt-secret --data-file=-
-```
+### Generating Secure Keys
 
-**Azure (Key Vault):**
 ```bash
-az keyvault secret set \
-  --vault-name v2g-vault \
-  --name jwt-secret \
-  --value "your-super-secret-key"
+# Generate JWT secret key (256-bit)
+openssl rand -hex 32
+
+# Generate Ethereum private key
+# Use a wallet like MetaMask or hardware wallet
+# NEVER commit private keys to version control
 ```
 
 ---
 
 ## SSL/HTTPS Setup
 
-### Option 1: Let's Encrypt with Certbot (Recommended)
+### Using Let's Encrypt with Nginx
 
+**1. Install Certbot**:
 ```bash
-# 1. Install Certbot
-sudo apt install certbot python3-certbot-nginx
+# Ubuntu/Debian
+sudo apt-get update
+sudo apt-get install certbot python3-certbot-nginx
 
-# 2. Obtain certificate
-sudo certbot --nginx -d yourdomain.com -d www.yourdomain.com
-
-# 3. Auto-renewal is configured automatically
-# Test with:
-sudo certbot renew --dry-run
+# Amazon Linux
+sudo yum install -y certbot python3-certbot-nginx
 ```
 
-### Option 2: Nginx with SSL
+**2. Obtain Certificate**:
+```bash
+sudo certbot --nginx -d yourdomain.com -d www.yourdomain.com
+```
 
-Create `nginx-ssl.conf`:
-
+**3. Nginx Configuration** (`/etc/nginx/nginx.conf`):
 ```nginx
 server {
     listen 80;
@@ -512,173 +519,266 @@ server {
 
     ssl_certificate /etc/letsencrypt/live/yourdomain.com/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/yourdomain.com/privkey.pem;
-    ssl_session_timeout 1d;
-    ssl_session_cache shared:SSL:50m;
-    ssl_session_tickets off;
-
-    # Modern SSL configuration
     ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256;
-    ssl_prefer_server_ciphers off;
+    ssl_ciphers HIGH:!aNULL:!MD5;
 
-    # HSTS
-    add_header Strict-Transport-Security "max-age=63072000" always;
-
+    # Frontend
     location / {
-        proxy_pass http://frontend:80;
+        proxy_pass http://localhost:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Backend API
+    location /api/ {
+        proxy_pass http://localhost:8000/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
     }
 
-    location /api {
-        proxy_pass http://backend:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
+    # WebSocket
+    location /ws/ {
+        proxy_pass http://localhost:8000/ws/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
     }
 }
 ```
 
-### Option 3: Cloud Load Balancer SSL
-
-**AWS ALB:**
+**4. Auto-renewal**:
 ```bash
-# Upload certificate to ACM
-aws acm import-certificate \
-  --certificate fileb://cert.pem \
-  --private-key fileb://privkey.pem \
-  --certificate-chain fileb://chain.pem
+# Test renewal
+sudo certbot renew --dry-run
 
-# Configure ALB listener for HTTPS
+# Setup cron job
+sudo crontab -e
+# Add: 0 3 * * * certbot renew --quiet
 ```
 
-**GCP:**
+---
+
+## Database Management
+
+### SQLite (Default)
+
+**Backup**:
 ```bash
-# Create managed SSL certificate
-gcloud compute ssl-certificates create v2g-cert \
-  --domains yourdomain.com
+# Backup database
+sqlite3 data/v2g.db ".backup 'backup/v2g_$(date +%Y%m%d_%H%M%S).db'"
+
+# Automate backups (cron)
+0 2 * * * /path/to/backup_script.sh
+```
+
+**Restore**:
+```bash
+sqlite3 data/v2g.db < backup/v2g_20251203_020000.db
+```
+
+### Migrating to PostgreSQL
+
+**1. Install PostgreSQL**:
+```bash
+sudo apt-get install postgresql postgresql-contrib
+```
+
+**2. Create Database**:
+```bash
+sudo -u postgres psql
+CREATE DATABASE v2g_marketplace;
+CREATE USER v2g_user WITH PASSWORD 'securepassword';
+GRANT ALL PRIVILEGES ON DATABASE v2g_marketplace TO v2g_user;
+\q
+```
+
+**3. Update Backend .env**:
+```env
+DATABASE_URL=postgresql://v2g_user:securepassword@localhost:5432/v2g_marketplace
+```
+
+**4. Migrate Data**:
+```bash
+# Export from SQLite
+sqlite3 data/v2g.db .dump > export.sql
+
+# Import to PostgreSQL (after conversion)
+psql -U v2g_user -d v2g_marketplace -f export_postgres.sql
 ```
 
 ---
 
 ## Monitoring & Logging
 
-### Docker Logs
+### Prometheus + Grafana
 
-```bash
-# View all logs
-docker-compose logs -f
-
-# View specific service logs
-docker-compose logs -f backend
-docker-compose logs -f frontend
-
-# View last 100 lines
-docker-compose logs --tail=100
-```
-
-### Prometheus + Grafana Setup
-
+**1. Setup Prometheus** (`prometheus.yml`):
 ```yaml
-# Add to docker-compose.yml
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'v2g-backend'
+    static_configs:
+      - targets: ['localhost:8000']
+```
+
+**2. Run Prometheus**:
+```bash
+docker run -d -p 9090:9090 \
+  -v $(pwd)/prometheus.yml:/etc/prometheus/prometheus.yml \
+  prom/prometheus
+```
+
+**3. Setup Grafana**:
+```bash
+docker run -d -p 3001:3000 grafana/grafana
+```
+
+Access Grafana at http://localhost:3001, add Prometheus data source.
+
+### Centralized Logging (ELK Stack)
+
+```bash
+# docker-compose-logging.yml
+version: '3.8'
 services:
-  prometheus:
-    image: prom/prometheus
-    volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+  elasticsearch:
+    image: elasticsearch:8.5.0
     ports:
-      - "9090:9090"
-
-  grafana:
-    image: grafana/grafana
-    ports:
-      - "3000:3000"
+      - "9200:9200"
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - discovery.type=single-node
+
+  logstash:
+    image: logstash:8.5.0
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./logstash.conf:/usr/share/logstash/pipeline/logstash.conf
+
+  kibana:
+    image: kibana:8.5.0
+    ports:
+      - "5601:5601"
 ```
 
-### Cloud Monitoring
+### Sentry Error Tracking
 
-**AWS CloudWatch:**
 ```bash
-# Install CloudWatch agent
-sudo yum install amazon-cloudwatch-agent
+# Install Sentry SDK
+pip install sentry-sdk[fastapi]
 
-# Configure and start
-sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
-  -a fetch-config -m ec2 -c file:config.json -s
-```
-
-**GCP Cloud Logging:**
-```bash
-# Logs are automatically collected from GKE/Cloud Run
-# View logs:
-gcloud logging read "resource.type=cloud_run_revision"
+# Configure in backend/api/main.py
+import sentry_sdk
+sentry_sdk.init(
+    dsn="https://your-dsn@sentry.io/project-id",
+    environment="production"
+)
 ```
 
 ---
 
-## Backup & Recovery
+## Troubleshooting
 
-### SQLite Database Backup
+### Common Issues
 
+**1. Backend Won't Start**:
 ```bash
-# Manual backup
-cp data/v2g.db data/v2g.db.backup.$(date +%Y%m%d)
+# Check logs
+docker-compose logs backend
 
-# Automated daily backup (cron)
-0 2 * * * cp /path/to/data/v2g.db /path/to/backups/v2g.db.$(date +\%Y\%m\%d)
-
-# Restore from backup
-cp data/v2g.db.backup.20240115 data/v2g.db
+# Common causes:
+# - Port 8000 already in use
+# - Database connection failed
+# - Missing environment variables
 ```
 
-### Docker Volume Backup
-
+**2. Frontend Can't Reach Backend**:
 ```bash
-# Backup volume
-docker run --rm \
-  -v v2g-marketplace_data:/data \
-  -v $(pwd)/backups:/backup \
-  alpine tar czf /backup/data-backup.tar.gz /data
-
-# Restore volume
-docker run --rm \
-  -v v2g-marketplace_data:/data \
-  -v $(pwd)/backups:/backup \
-  alpine sh -c "cd /data && tar xzf /backup/data-backup.tar.gz --strip 1"
+# Check CORS configuration
+# Verify VITE_API_URL in frontend/.env
+# Test backend directly:
+curl http://localhost:8000/health
 ```
 
-### Cloud Backup
-
-**AWS S3:**
+**3. Database Locked**:
 ```bash
-# Upload backup to S3
-aws s3 cp data/v2g.db s3://your-bucket/backups/v2g.db.$(date +%Y%m%d)
-
-# Sync backups directory
-aws s3 sync ./backups s3://your-bucket/backups/
+# SQLite only allows one writer at a time
+# Check for hung processes:
+ps aux | grep python
+# Kill if necessary:
+kill -9 <PID>
 ```
 
-**GCP Cloud Storage:**
+**4. Blockchain Connection Failed**:
 ```bash
-gsutil cp data/v2g.db gs://your-bucket/backups/v2g.db.$(date +%Y%m%d)
+# Verify RPC URL is accessible
+curl -X POST $POLYGON_RPC_URL \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'
+
+# Check contract addresses are correct
+```
+
+**5. Memory Issues**:
+```bash
+# Increase Docker memory limit
+# In Docker Desktop: Settings > Resources > Memory
+
+# Monitor memory usage
+docker stats
+```
+
+### Health Checks
+
+```bash
+# Backend health
+curl http://localhost:8000/health
+
+# Database connectivity
+curl http://localhost:8000/health/ready
+
+# Metrics
+curl http://localhost:8000/metrics
+```
+
+### Log Analysis
+
+```bash
+# View live logs
+docker-compose logs -f --tail=100
+
+# Search for errors
+docker-compose logs | grep ERROR
+
+# Filter by service
+docker-compose logs backend | grep "simulation"
 ```
 
 ---
 
 ## Production Checklist
 
-Before deploying to production, ensure:
+Before going live:
 
-- [ ] `JWT_SECRET` is set to a secure, unique value
-- [ ] SSL/HTTPS is configured
-- [ ] Database backups are scheduled
-- [ ] Monitoring and alerting is configured
-- [ ] Rate limiting is enabled
-- [ ] CORS is properly configured
-- [ ] Firewall rules restrict unnecessary access
-- [ ] Logs are being collected and retained
-- [ ] Health checks are passing
-- [ ] Load testing has been performed
+- [ ] All tests passing
+- [ ] Environment variables configured
+- [ ] SSL/HTTPS enabled
+- [ ] Database backups configured
+- [ ] Rate limiting enabled
+- [ ] Monitoring configured (Prometheus/Grafana)
+- [ ] Error tracking configured (Sentry)
+- [ ] Logging centralized (ELK/CloudWatch)
+- [ ] Domain configured with DNS
+- [ ] Firewall rules configured
+- [ ] Regular security updates scheduled
+- [ ] Backup/restore procedures documented
+- [ ] Load testing completed
+- [ ] Disaster recovery plan documented
 
-See [LAUNCH_CHECKLIST.md](LAUNCH_CHECKLIST.md) for a complete pre-launch checklist.
+---
+
+**For deployment support, contact: devops@v2g-marketplace.com**
