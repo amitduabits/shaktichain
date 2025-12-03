@@ -82,6 +82,7 @@ export function Web3Provider({
 }: Web3ProviderProps) {
   // Mode state
   const [mode, setModeState] = useState<AppMode>(defaultMode);
+  const [web3Error, setWeb3Error] = useState<string | null>(null);
 
   const setMode = useCallback((newMode: AppMode) => {
     setModeState(newMode);
@@ -151,6 +152,7 @@ export function Web3Provider({
         fontStack: 'system',
       });
 
+  // Wrap in error boundary to prevent WalletConnect errors from breaking the app
   return (
     <WagmiProvider config={config}>
       <QueryClientProvider client={queryClient}>
@@ -161,7 +163,16 @@ export function Web3Provider({
         >
           <ModeContext.Provider value={modeValue}>
             <TransactionContext.Provider value={transactionValue}>
-              {children}
+              {web3Error ? (
+                <div style={{ padding: '20px', color: '#ff6b6b' }}>
+                  <h3>Web3 Connection Warning</h3>
+                  <p>{web3Error}</p>
+                  <p>The app will continue to work with backend API.</p>
+                  <div style={{ marginTop: '20px' }}>{children}</div>
+                </div>
+              ) : (
+                children
+              )}
             </TransactionContext.Provider>
           </ModeContext.Provider>
         </RainbowKitProvider>

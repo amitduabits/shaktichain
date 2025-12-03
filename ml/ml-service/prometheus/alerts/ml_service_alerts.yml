@@ -1,0 +1,354 @@
+# SHAKTI-CHAIN ML Service Alert Rules
+# Organized by severity: critical, warning, info
+
+groups:
+  # ============================================
+  # CRITICAL ALERTS (PagerDuty)
+  # ============================================
+  - name: ml_service_critical
+    interval: 30s
+    rules:
+      # High error rate
+      - alert: MLServiceHighErrorRate
+        expr: |
+          (
+            sum(rate(ml_request_total{status=~"5.."}[5m]))
+            /
+            sum(rate(ml_request_total[5m]))
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          component: ml-service
+          alert_channel: pagerduty
+        annotations:
+          summary: "ML Service experiencing high error rate"
+          description: "Error rate is {{ $value | humanizePercentage }} for endpoint {{ $labels.endpoint }} (threshold: 5%)"
+          runbook: "https://wiki.shaktichain.io/runbooks/ML-001"
+          dashboard: "http://grafana:3000/d/ml-service-overview"
+
+      # P99 latency too high
+      - alert: MLServiceHighLatency
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(ml_request_latency_seconds_bucket[10m])) by (endpoint, le)
+          ) > 2.0
+        for: 10m
+        labels:
+          severity: critical
+          component: ml-service
+          alert_channel: pagerduty
+        annotations:
+          summary: "ML Service P99 latency exceeds threshold"
+          description: "P99 latency is {{ $value | humanizeDuration }} for {{ $labels.endpoint }} (threshold: 2s)"
+          runbook: "https://wiki.shaktichain.io/runbooks/ML-001"
+          impact: "Users experiencing slow predictions"
+
+      # Model serving failure
+      - alert: MLModelServingFailed
+        expr: |
+          sum(rate(ml_prediction_errors_total[5m])) by (model) > 10
+        for: 5m
+        labels:
+          severity: critical
+          component: model-serving
+          alert_channel: pagerduty
+        annotations:
+          summary: "Model {{ $labels.model }} failing to serve predictions"
+          description: "{{ $labels.model }} has {{ $value }} errors/sec"
+          runbook: "https://wiki.shaktichain.io/runbooks/ML-002"
+          action_required: "Check model health and reload if necessary"
+
+      # Trading agent offline
+      - alert: TradingAgentOffline
+        expr: |
+          time() - ml_model_last_updated_timestamp{model="trading_agent"} > 600
+        for: 5m
+        labels:
+          severity: critical
+          component: trading-agent
+          alert_channel: pagerduty
+        annotations:
+          summary: "Trading agent has stopped responding"
+          description: "No updates from trading agent for {{ $value | humanizeDuration }}"
+          runbook: "https://wiki.shaktichain.io/runbooks/ML-004"
+          action_required: "Restart trading agent immediately"
+
+      # Cache unavailable
+      - alert: MLServiceCacheUnavailable
+        expr: |
+          up{job="redis"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: cache
+          alert_channel: pagerduty
+        annotations:
+          summary: "Redis cache is unavailable"
+          description: "ML service cache (Redis) is down, degraded performance expected"
+          runbook: "https://wiki.shaktichain.io/runbooks/INFRA-001"
+
+      # Service down
+      - alert: MLServiceDown
+        expr: |
+          up{job="ml-service"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: ml-service
+          alert_channel: pagerduty
+        annotations:
+          summary: "ML Service is down"
+          description: "ML Service is not responding to health checks"
+          runbook: "https://wiki.shaktichain.io/runbooks/ML-003"
+          action_required: "Investigate service status immediately"
+
+      # Memory exhaustion
+      - alert: MLServiceMemoryExhaustion
+        expr: |
+          (
+            container_memory_usage_bytes{container="ml-service"}
+            /
+            container_spec_memory_limit_bytes{container="ml-service"}
+          ) > 0.90
+        for: 5m
+        labels:
+          severity: critical
+          component: ml-service
+          alert_channel: pagerduty
+        annotations:
+          summary: "ML Service memory usage critical"
+          description: "Memory usage at {{ $value | humanizePercentage }} of limit"
+          runbook: "https://wiki.shaktichain.io/runbooks/INFRA-002"
+
+  # ============================================
+  # WARNING ALERTS (Slack)
+  # ============================================
+  - name: ml_service_warnings
+    interval: 60s
+    rules:
+      # MAPE above threshold
+      - alert: ForecastAccuracyDegraded
+        expr: |
+          ml_forecast_accuracy{metric="mape"} > 0.15
+        for: 1h
+        labels:
+          severity: warning
+          component: forecasting
+          alert_channel: slack
+        annotations:
+          summary: "Forecast accuracy degraded for {{ $labels.model }}"
+          description: "MAPE is {{ $value | humanizePercentage }} for horizon {{ $labels.horizon }} in {{ $labels.city }} (threshold: 15%)"
+          runbook: "https://wiki.shaktichain.io/runbooks/ML-002"
+          dashboard: "http://grafana:3000/d/forecast-performance"
+
+      # Feature staleness
+      - alert: FeatureDataStale
+        expr: |
+          ml_feature_staleness_seconds > 600
+        for: 10m
+        labels:
+          severity: warning
+          component: feature-pipeline
+          alert_channel: slack
+        annotations:
+          summary: "Feature {{ $labels.feature_name }} data is stale"
+          description: "Feature hasn't been updated for {{ $value | humanizeDuration }}"
+          runbook: "https://wiki.shaktichain.io/runbooks/ML-003"
+          action_required: "Check feature pipeline health"
+
+      # Feature drift detected
+      - alert: FeatureDriftDetected
+        expr: |
+          ml_feature_drift_score{drift_type="ks"} > 0.5
+        for: 30m
+        labels:
+          severity: warning
+          component: data-quality
+          alert_channel: slack
+        annotations:
+          summary: "Feature drift detected for {{ $labels.feature_name }}"
+          description: "KS drift score is {{ $value }} (threshold: 0.5)"
+          runbook: "https://wiki.shaktichain.io/runbooks/ML-002"
+          action_required: "Evaluate model retraining necessity"
+
+      # Anomaly rate spike
+      - alert: AnomalyRateSpike
+        expr: |
+          rate(ml_anomaly_alerts_total[15m])
+          >
+          2 * avg_over_time(rate(ml_anomaly_alerts_total[15m])[1h:])
+        for: 15m
+        labels:
+          severity: warning
+          component: anomaly-detection
+          alert_channel: slack
+        annotations:
+          summary: "Spike in anomaly detection rate"
+          description: "Anomaly rate is {{ $value }} (2x normal)"
+          runbook: "https://wiki.shaktichain.io/runbooks/ML-002"
+          dashboard: "http://grafana:3000/d/anomaly-detection"
+
+      # Cache hit rate low
+      - alert: ModelCacheHitRateLow
+        expr: |
+          (
+            sum(rate(ml_cache_hits_total[10m])) by (model)
+            /
+            (sum(rate(ml_cache_hits_total[10m])) by (model) + sum(rate(ml_cache_misses_total[10m])) by (model))
+          ) < 0.8
+        for: 30m
+        labels:
+          severity: warning
+          component: cache
+          alert_channel: slack
+        annotations:
+          summary: "Low cache hit rate for {{ $labels.model }}"
+          description: "Cache hit rate is {{ $value | humanizePercentage }} (threshold: 80%)"
+          action_required: "Review caching strategy"
+
+      # P95 latency elevated
+      - alert: MLServiceElevatedLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(ml_request_latency_seconds_bucket[10m])) by (endpoint, le)
+          ) > 1.0
+        for: 15m
+        labels:
+          severity: warning
+          component: ml-service
+          alert_channel: slack
+        annotations:
+          summary: "Elevated P95 latency for {{ $labels.endpoint }}"
+          description: "P95 latency is {{ $value | humanizeDuration }} (threshold: 1s)"
+          runbook: "https://wiki.shaktichain.io/runbooks/ML-001"
+
+      # Trading performance degraded
+      - alert: TradingProfitabilityLow
+        expr: |
+          (
+            sum(increase(ml_trading_profit_total[24h]))
+            -
+            sum(increase(ml_trading_loss_total[24h]))
+          ) < 0
+        for: 24h
+        labels:
+          severity: warning
+          component: trading
+          alert_channel: slack
+        annotations:
+          summary: "Trading agent showing negative P&L"
+          description: "24h P&L is {{ $value | humanize }} INR"
+          runbook: "https://wiki.shaktichain.io/runbooks/ML-004"
+          dashboard: "http://grafana:3000/d/trading-performance"
+
+      # Model not updated recently
+      - alert: ModelUpdateDelayed
+        expr: |
+          time() - ml_model_last_updated_timestamp > 604800  # 7 days
+        for: 1h
+        labels:
+          severity: warning
+          component: model-management
+          alert_channel: slack
+        annotations:
+          summary: "Model {{ $labels.model }} hasn't been updated recently"
+          description: "Last update was {{ $value | humanizeDuration }} ago"
+          action_required: "Consider model retraining"
+
+  # ============================================
+  # INFO ALERTS (Email)
+  # ============================================
+  - name: ml_service_info
+    interval: 300s  # 5 minutes
+    rules:
+      # Model retrained
+      - alert: ModelRetrainingCompleted
+        expr: |
+          changes(ml_model_last_updated_timestamp[5m]) > 0
+        labels:
+          severity: info
+          component: model-management
+          alert_channel: email
+        annotations:
+          summary: "Model {{ $labels.model }} has been retrained"
+          description: "New model version deployed"
+          dashboard: "http://grafana:3000/d/ml-service-overview"
+
+      # Daily performance summary
+      - alert: DailyPerformanceSummary
+        expr: |
+          hour() == 9 and minute() < 5
+        labels:
+          severity: info
+          component: reporting
+          alert_channel: email
+        annotations:
+          summary: "Daily ML performance summary"
+          description: "Daily performance metrics report"
+          action_required: "Review dashboard for details"
+
+      # High volume period detected
+      - alert: HighVolumeTrafficDetected
+        expr: |
+          rate(ml_request_total[5m]) > 100
+        for: 30m
+        labels:
+          severity: info
+          component: ml-service
+          alert_channel: email
+        annotations:
+          summary: "High volume traffic detected"
+          description: "Request rate is {{ $value }} req/sec"
+
+  # ============================================
+  # BUSINESS METRICS ALERTS
+  # ============================================
+  - name: business_metrics
+    interval: 60s
+    rules:
+      # Forecast errors trending up
+      - alert: ForecastErrorTrendingUp
+        expr: |
+          (
+            avg_over_time(ml_forecast_accuracy{metric="mape"}[1h])
+            /
+            avg_over_time(ml_forecast_accuracy{metric="mape"}[24h:1h])
+          ) > 1.5
+        for: 2h
+        labels:
+          severity: warning
+          component: forecasting
+          alert_channel: slack
+        annotations:
+          summary: "Forecast errors increasing"
+          description: "Current MAPE is 50% higher than 24h average"
+          runbook: "https://wiki.shaktichain.io/runbooks/ML-002"
+
+      # Battery management inefficient
+      - alert: BatteryManagementInefficient
+        expr: |
+          stddev_over_time(ml_battery_soc[1h]) < 0.1
+        for: 4h
+        labels:
+          severity: warning
+          component: trading
+          alert_channel: slack
+        annotations:
+          summary: "Battery SOC not varying (potential inefficient usage)"
+          description: "SOC standard deviation is {{ $value }}"
+          action_required: "Review trading strategy"
+
+      # Excessive anomalies of high severity
+      - alert: HighSeverityAnomaliesExcessive
+        expr: |
+          sum(rate(ml_anomaly_alerts_total{severity="high"}[1h])) > 5
+        for: 1h
+        labels:
+          severity: warning
+          component: anomaly-detection
+          alert_channel: slack
+        annotations:
+          summary: "High rate of severe anomalies"
+          description: "{{ $value }} high-severity anomalies per second"
+          dashboard: "http://grafana:3000/d/anomaly-detection"

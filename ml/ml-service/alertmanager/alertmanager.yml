@@ -1,0 +1,350 @@
+# AlertManager Configuration for SHAKTI-CHAIN ML Service
+# Routes alerts to: PagerDuty (critical), Slack (warning), Email (info)
+
+global:
+  resolve_timeout: 5m
+  # Slack webhook (configure in environment)
+  slack_api_url: ${SLACK_WEBHOOK_URL}
+  # PagerDuty integration key (configure in environment)
+  pagerduty_url: 'https://events.pagerduty.com/v2/enqueue'
+
+# Templates for notifications
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# Route tree for alert distribution
+route:
+  # Default receiver
+  receiver: 'default'
+  # Group alerts by these labels
+  group_by: ['alertname', 'component', 'severity']
+  # Wait before sending notification (batch similar alerts)
+  group_wait: 30s
+  # Wait before sending another notification for same group
+  group_interval: 5m
+  # Re-notify if alert still firing after this time
+  repeat_interval: 4h
+
+  # Child routes (evaluated top to bottom)
+  routes:
+    # ========================================
+    # CRITICAL ALERTS -> PagerDuty
+    # ========================================
+    - receiver: 'pagerduty-critical'
+      match:
+        severity: critical
+      group_wait: 10s
+      group_interval: 2m
+      repeat_interval: 30m
+      continue: true  # Also send to Slack
+
+    # Also send critical to Slack
+    - receiver: 'slack-critical'
+      match:
+        severity: critical
+      group_wait: 10s
+
+    # ========================================
+    # WARNING ALERTS -> Slack
+    # ========================================
+    - receiver: 'slack-warnings'
+      match:
+        severity: warning
+      group_wait: 1m
+      group_interval: 10m
+      repeat_interval: 2h
+
+    # ========================================
+    # INFO ALERTS -> Email
+    # ========================================
+    - receiver: 'email-info'
+      match:
+        severity: info
+      group_wait: 5m
+      group_interval: 30m
+      repeat_interval: 24h
+
+    # ========================================
+    # SPECIFIC COMPONENT ROUTING
+    # ========================================
+
+    # Trading alerts -> Trading team Slack + PagerDuty
+    - receiver: 'trading-team'
+      match:
+        component: trading
+      continue: false
+
+    # Model performance -> ML team Slack
+    - receiver: 'ml-team'
+      match:
+        component: model-serving
+
+    # Feature pipeline -> Data team Slack
+    - receiver: 'data-team'
+      match:
+        component: feature-pipeline
+
+# Inhibition rules (suppress alerts based on other alerts)
+inhibit_rules:
+  # Suppress warning if critical alert for same component
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['component', 'alertname']
+
+  # Suppress downstream failures when service is down
+  - source_match:
+      alertname: 'MLServiceDown'
+    target_match_re:
+      alertname: '.*Latency|.*Error.*'
+    equal: ['instance']
+
+  # Suppress model errors when model serving failed
+  - source_match:
+      alertname: 'MLModelServingFailed'
+    target_match_re:
+      alertname: '.*Prediction.*|.*Inference.*'
+    equal: ['model']
+
+# Receiver configurations
+receivers:
+  # ========================================
+  # Default receiver (catch-all)
+  # ========================================
+  - name: 'default'
+    webhook_configs:
+      - url: 'http://alertmanager-webhook:5001/alerts'
+        send_resolved: true
+
+  # ========================================
+  # PagerDuty (Critical alerts)
+  # ========================================
+  - name: 'pagerduty-critical'
+    pagerduty_configs:
+      - routing_key: ${PAGERDUTY_ROUTING_KEY}
+        severity: 'critical'
+        description: |
+          {{ range .Alerts }}
+          Alert: {{ .Labels.alertname }}
+          Component: {{ .Labels.component }}
+          Summary: {{ .Annotations.summary }}
+          {{ end }}
+        details:
+          firing: '{{ .Alerts.Firing | len }}'
+          resolved: '{{ .Alerts.Resolved | len }}'
+          runbook: '{{ (index .Alerts 0).Annotations.runbook }}'
+          dashboard: '{{ (index .Alerts 0).Annotations.dashboard }}'
+        client: 'SHAKTI-CHAIN Prometheus'
+        client_url: 'http://prometheus:9090'
+        send_resolved: true
+
+  # ========================================
+  # Slack Channels
+  # ========================================
+
+  # Critical alerts
+  - name: 'slack-critical'
+    slack_configs:
+      - channel: '#ml-alerts-critical'
+        send_resolved: true
+        username: 'SHAKTI-CHAIN AlertManager'
+        icon_emoji: ':rotating_light:'
+        color: '{{ if eq .Status "firing" }}danger{{ else }}good{{ end }}'
+        title: ':fire: Critical Alert: {{ .GroupLabels.alertname }}'
+        title_link: 'http://prometheus:9090/alerts'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Labels.alertname }}
+          *Component:* {{ .Labels.component }}
+          *Severity:* {{ .Labels.severity }}
+          *Summary:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          {{ if .Annotations.runbook }}
+          *Runbook:* {{ .Annotations.runbook }}
+          {{ end }}
+          {{ if .Annotations.dashboard }}
+          *Dashboard:* {{ .Annotations.dashboard }}
+          {{ end }}
+          {{ if .Annotations.action_required }}
+          *Action Required:* {{ .Annotations.action_required }}
+          {{ end }}
+          *Status:* {{ .Status }}
+          {{ end }}
+        actions:
+          - type: button
+            text: 'View Runbook'
+            url: '{{ (index .Alerts 0).Annotations.runbook }}'
+          - type: button
+            text: 'View Dashboard'
+            url: '{{ (index .Alerts 0).Annotations.dashboard }}'
+          - type: button
+            text: 'Prometheus'
+            url: 'http://prometheus:9090/alerts'
+
+  # Warning alerts
+  - name: 'slack-warnings'
+    slack_configs:
+      - channel: '#ml-alerts-warnings'
+        send_resolved: true
+        username: 'SHAKTI-CHAIN AlertManager'
+        icon_emoji: ':warning:'
+        color: '{{ if eq .Status "firing" }}warning{{ else }}good{{ end }}'
+        title: ':warning: Warning: {{ .GroupLabels.alertname }}'
+        title_link: 'http://prometheus:9090/alerts'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Labels.alertname }}
+          *Component:* {{ .Labels.component }}
+          *Summary:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          {{ if .Annotations.runbook }}
+          *Runbook:* {{ .Annotations.runbook }}
+          {{ end }}
+          {{ end }}
+
+  # Trading team
+  - name: 'trading-team'
+    slack_configs:
+      - channel: '#trading-alerts'
+        send_resolved: true
+        username: 'Trading Agent Monitor'
+        icon_emoji: ':chart_with_upwards_trend:'
+        color: '{{ if eq .Status "firing" }}{{ if eq .Labels.severity "critical" }}danger{{ else }}warning{{ end }}{{ else }}good{{ end }}'
+        title: 'Trading Alert: {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Labels.alertname }}
+          *Severity:* {{ .Labels.severity }}
+          *Summary:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          {{ if .Annotations.runbook }}
+          *Runbook:* {{ .Annotations.runbook }}
+          {{ end }}
+          {{ end }}
+    pagerduty_configs:
+      - routing_key: ${PAGERDUTY_TRADING_KEY}
+        severity: '{{ .Labels.severity }}'
+        description: '{{ (index .Alerts 0).Annotations.summary }}'
+        send_resolved: true
+
+  # ML team
+  - name: 'ml-team'
+    slack_configs:
+      - channel: '#ml-engineering'
+        send_resolved: true
+        username: 'ML Service Monitor'
+        icon_emoji: ':robot_face:'
+        title: 'ML Alert: {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Labels.alertname }}
+          *Model:* {{ .Labels.model }}
+          *Summary:* {{ .Annotations.summary }}
+          {{ end }}
+
+  # Data team
+  - name: 'data-team'
+    slack_configs:
+      - channel: '#data-engineering'
+        send_resolved: true
+        username: 'Data Pipeline Monitor'
+        icon_emoji: ':database:'
+        title: 'Data Alert: {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Labels.alertname }}
+          *Summary:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          {{ end }}
+
+  # ========================================
+  # Email (Info alerts)
+  # ========================================
+  - name: 'email-info'
+    email_configs:
+      - to: ${EMAIL_RECIPIENTS}
+        from: 'alertmanager@shaktichain.io'
+        smarthost: ${SMTP_SMARTHOST}
+        auth_username: ${SMTP_USERNAME}
+        auth_password: ${SMTP_PASSWORD}
+        require_tls: true
+        send_resolved: true
+        headers:
+          Subject: '[SHAKTI-CHAIN] {{ .Status | toUpper }}: {{ .GroupLabels.alertname }}'
+        html: |
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <style>
+              body { font-family: Arial, sans-serif; }
+              .alert { padding: 15px; margin: 10px 0; border-left: 4px solid; }
+              .critical { border-color: #d32f2f; background-color: #ffebee; }
+              .warning { border-color: #f57c00; background-color: #fff3e0; }
+              .info { border-color: #0288d1; background-color: #e1f5fe; }
+              .resolved { border-color: #388e3c; background-color: #e8f5e9; }
+              h2 { margin-top: 0; }
+              table { border-collapse: collapse; width: 100%; }
+              th, td { padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }
+              th { background-color: #f5f5f5; }
+            </style>
+          </head>
+          <body>
+            <h2>SHAKTI-CHAIN ML Service Alert</h2>
+            <div class="alert {{ .Status }}">
+              <strong>Status:</strong> {{ .Status | toUpper }}<br>
+              <strong>Alert Group:</strong> {{ .GroupLabels.alertname }}<br>
+              <strong>Component:</strong> {{ .GroupLabels.component }}<br>
+              <strong>Severity:</strong> {{ .GroupLabels.severity }}<br>
+              <strong>Firing Alerts:</strong> {{ .Alerts.Firing | len }}<br>
+              <strong>Resolved Alerts:</strong> {{ .Alerts.Resolved | len }}
+            </div>
+
+            <h3>Alert Details</h3>
+            <table>
+              <tr>
+                <th>Alert</th>
+                <th>Component</th>
+                <th>Summary</th>
+                <th>Status</th>
+              </tr>
+              {{ range .Alerts }}
+              <tr>
+                <td>{{ .Labels.alertname }}</td>
+                <td>{{ .Labels.component }}</td>
+                <td>{{ .Annotations.summary }}</td>
+                <td>{{ .Status }}</td>
+              </tr>
+              {{ end }}
+            </table>
+
+            <h3>Links</h3>
+            <ul>
+              <li><a href="http://prometheus:9090/alerts">Prometheus Alerts</a></li>
+              <li><a href="http://grafana:3000">Grafana Dashboards</a></li>
+              {{ if (index .Alerts 0).Annotations.runbook }}
+              <li><a href="{{ (index .Alerts 0).Annotations.runbook }}">Runbook</a></li>
+              {{ end }}
+            </ul>
+          </body>
+          </html>
+
+# Time windows for muting alerts (optional)
+time_intervals:
+  - name: business_hours
+    time_intervals:
+      - times:
+          - start_time: '09:00'
+            end_time: '18:00'
+        weekdays: ['monday:friday']
+        location: 'Asia/Kolkata'
+
+  - name: off_hours
+    time_intervals:
+      - times:
+          - start_time: '18:00'
+            end_time: '09:00'
+        weekdays: ['monday:friday']
+        location: 'Asia/Kolkata'
+      - weekdays: ['saturday', 'sunday']
+        location: 'Asia/Kolkata'

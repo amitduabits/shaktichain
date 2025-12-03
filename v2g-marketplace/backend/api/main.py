@@ -14,6 +14,10 @@ from fastapi import FastAPI, HTTPException, Query, Depends, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
+# Load environment variables from .env file
+from dotenv import load_dotenv
+load_dotenv()
+
 # Add backend directory to path for imports (works on both Windows and Unix)
 _backend_dir = Path(__file__).parent.parent
 if str(_backend_dir) not in sys.path:

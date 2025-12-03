@@ -33,7 +33,8 @@ const polygonAmoyWithCustomRPC = {
 // Select chains based on environment
 const getChains = () => {
   if (isDevelopment) {
-    return [hardhat, polygonAmoyWithCustomRPC, polygonWithCustomRPC] as const;
+    // Use Polygon Amoy testnet for development (no local Hardhat node needed)
+    return [polygonAmoyWithCustomRPC, polygonWithCustomRPC, hardhat] as const;
   }
   if (isTestnet) {
     return [polygonAmoyWithCustomRPC] as const;
@@ -65,7 +66,7 @@ export const CHAIN_IDS = {
 
 // Get the default chain based on environment
 export const getDefaultChain = () => {
-  if (isDevelopment) return hardhat;
+  if (isDevelopment) return polygonAmoy; // Use Polygon Amoy testnet for development
   if (isTestnet) return polygonAmoy;
   return polygon;
 };
