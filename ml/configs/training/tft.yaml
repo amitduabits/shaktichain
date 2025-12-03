@@ -1,0 +1,196 @@
+# TFT Training Configuration for SHAKTI-CHAIN V2G
+
+training:
+  # Training parameters
+  max_epochs: 100
+  patience: 10  # Early stopping patience
+  min_delta: 0.0001  # Minimum improvement for early stopping
+
+  # Optimizer settings
+  learning_rate: 0.001
+  weight_decay: 1e-5
+  optimizer: "adam"  # Options: adam, adamw, sgd
+
+  # Learning rate scheduler
+  scheduler: "onecycle"  # Options: onecycle, cosine, plateau, step, null
+  scheduler_config:
+    # OneCycleLR specific
+    pct_start: 0.3  # Percentage of cycle for warmup
+    anneal_strategy: "cos"  # Options: cos, linear
+    div_factor: 25.0  # Initial lr = max_lr / div_factor
+    final_div_factor: 10000.0  # Final lr = max_lr / final_div_factor
+
+    # ReduceLROnPlateau specific (if scheduler: plateau)
+    factor: 0.5
+    patience: 5
+    min_lr: 1e-6
+
+    # StepLR specific (if scheduler: step)
+    step_size: 10
+    gamma: 0.1
+
+    # CosineAnnealingLR specific (if scheduler: cosine)
+    t_max: 100
+    eta_min: 1e-6
+
+  # Batch settings
+  batch_size: 64
+  accumulate_grad_batches: 2  # Effective batch size = 64 * 2 = 128
+
+  # Gradient clipping
+  gradient_clip_val: 1.0
+  gradient_clip_algorithm: "norm"  # Options: norm, value
+
+  # Mixed precision
+  precision: "16-mixed"  # Options: 32, 16, 16-mixed, bf16-mixed
+
+  # Regularization
+  normalized_loss: false  # Use NormalizedQuantileLoss instead of QuantileLoss
+
+# Data settings
+data:
+  # Data path
+  data_path: "data/processed/processed_data.parquet"
+
+  # Temporal splits (avoid data leakage)
+  train_start: "2022-01-01"
+  train_end: "2023-12-31"
+  val_start: "2024-01-01"
+  val_end: "2024-06-30"
+  test_start: "2024-07-01"
+  test_end: "2024-12-31"
+
+  # Sequence lengths
+  encoder_length: 168  # 1 week of hourly data
+  decoder_length: 48   # 2 days ahead prediction
+
+  # Stride for sample creation
+  stride_train: 1   # Create overlapping samples every hour (maximum data)
+  stride_val: 24    # Create samples every day (reduce validation time)
+  stride_test: 24   # Create samples every day
+
+  # Data loader settings
+  num_workers: 4
+  pin_memory: true
+  persistent_workers: true
+
+# Feature settings
+features:
+  # Target variable(s)
+  target_columns:
+    - "load_mw"
+
+  # Known future features (available at prediction time)
+  known_future_features:
+    - "hour"
+    - "hour_sin"
+    - "hour_cos"
+    - "day_of_week"
+    - "day_of_week_sin"
+    - "day_of_week_cos"
+    - "is_weekend"
+    - "is_holiday"
+    - "is_peak_hour"
+    - "month_sin"
+
+  # Observed features (only available historically)
+  observed_features:
+    - "load_mw_lag_1h"
+    - "load_mw_lag_24h"
+    - "temperature_c_delhi"
+    - "price_inr_mwh_dam"
+    - "humidity_pct_delhi"
+
+  # Static features (time-invariant)
+  static_features: []  # Not used in current configuration
+
+# Model architecture
+model:
+  name: "temporal_fusion_transformer"
+  type: "tft"
+
+  input_dims:
+    static_input_size: 0  # Will be set from features.static_features length
+    known_input_size: 10  # Will be set from features.known_future_features length
+    observed_input_size: 5  # Will be set from features.observed_features length
+
+  sequence_lengths:
+    encoder_length: 168
+    decoder_length: 48
+
+  architecture:
+    hidden_size: 160
+    lstm_layers: 2
+    num_attention_heads: 4
+    dropout: 0.1
+
+  output:
+    output_size: 1  # Will be set from features.target_columns length
+    quantiles: [0.1, 0.5, 0.9]
+
+# Callbacks
+callbacks:
+  early_stopping:
+    enabled: true
+    monitor: "val_loss"
+    patience: 10
+    mode: "min"
+    min_delta: 0.0001
+
+  model_checkpoint:
+    enabled: true
+    monitor: "val_loss"
+    mode: "min"
+    save_top_k: 3
+    save_last: true
+    filename: "tft-{epoch:02d}-{val_loss:.4f}-{val_mape:.2f}"
+    dirpath: "checkpoints/tft"
+
+  learning_rate_monitor:
+    enabled: true
+    logging_interval: "step"
+
+# MLflow settings
+mlflow:
+  enabled: true
+  tracking_uri: "mlruns"
+  experiment_name: "shakti-chain-tft"
+  run_name: null  # Auto-generated if null
+  tags:
+    model: "tft"
+    project: "shakti-chain"
+    version: "1.0.0"
+
+  # Log artifacts
+  log_model: true
+  log_feature_importance: true
+  log_predictions: true
+
+  # Model registry
+  register_model: true
+  model_name: "shakti-chain-tft"
+  model_stage: "Staging"  # Options: None, Staging, Production, Archived
+
+# Hardware settings
+hardware:
+  accelerator: "auto"  # Options: auto, cpu, gpu, tpu
+  devices: 1
+  strategy: "auto"  # Options: auto, ddp, dp, fsdp
+
+# Logging
+logging:
+  level: "INFO"
+  log_every_n_steps: 10
+  enable_progress_bar: true
+  log_attention_weights: false  # Log attention weights during validation
+
+# Reproducibility
+seed: 42
+deterministic: false  # Set to true for exact reproducibility (slower)
+
+# Target metrics
+target_metrics:
+  # Target MAPE < 5%
+  mape_threshold: 5.0
+  # Target coverage (90% PI) > 88%
+  coverage_threshold: 0.88

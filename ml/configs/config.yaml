@@ -1,0 +1,33 @@
+defaults:
+  - data: default
+  - model: lstm
+  - training: default
+  - logging: default
+  - _self_
+
+# Project settings
+project:
+  name: shakti-chain-v2g
+  version: "0.1.0"
+  description: "Energy Load Forecasting for V2G Platform"
+
+# Paths
+paths:
+  data_dir: ${oc.env:PWD}/data
+  raw_data_dir: ${paths.data_dir}/raw
+  processed_data_dir: ${paths.data_dir}/processed
+  features_dir: ${paths.data_dir}/features
+  models_dir: ${oc.env:PWD}/models
+  logs_dir: ${oc.env:PWD}/logs
+  mlflow_uri: ${paths.logs_dir}/mlruns
+
+# Random seed for reproducibility
+seed: 42
+
+# Experiment tracking
+experiment:
+  name: ${project.name}
+  run_name: ${now:%Y-%m-%d_%H-%M-%S}
+  tags:
+    environment: development
+    version: ${project.version}

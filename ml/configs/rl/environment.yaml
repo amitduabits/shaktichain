@@ -1,0 +1,64 @@
+# V2G Trading Environment Configuration
+# SHAKTI-CHAIN Reinforcement Learning Platform
+
+# Battery Configuration
+battery:
+  capacity_kwh: 60.0              # Total battery capacity (kWh)
+  max_charge_rate_kw: 11.0        # Maximum charging power (kW)
+  max_discharge_rate_kw: 11.0     # Maximum discharging power (kW)
+  charge_efficiency: 0.95         # Charging efficiency (0-1)
+  discharge_efficiency: 0.95      # Discharging efficiency (0-1)
+  min_soc: 0.2                    # Minimum SOC (personal use reserve)
+  max_soc: 0.95                   # Maximum SOC (battery health)
+  initial_soc: 0.5                # Initial state of charge
+  degradation_per_cycle: 0.0001   # Battery degradation per full cycle
+  cycle_cost_per_kwh: 0.05        # Cost per kWh cycled (degradation)
+
+# Market Configuration
+market:
+  base_price: 5.0                 # Base price per kWh (INR)
+  price_volatility: 0.3           # Price volatility factor
+  bid_ask_spread: 0.05            # Default bid-ask spread
+  transaction_fee: 0.01           # Transaction fee percentage
+  min_trade_kwh: 1.0              # Minimum trade size
+  max_trade_kwh: 50.0             # Maximum trade size per hour
+  price_impact: 0.001             # Price impact of trades
+
+# Reward Configuration
+reward:
+  profit_weight: 1.0              # Weight for trading profit
+  battery_health_weight: 0.5      # Weight for battery health
+  grid_service_weight: 0.3        # Weight for grid service bonus
+  reputation_weight: 0.2          # Weight for reputation bonus
+  failed_delivery_penalty: -100.0 # Penalty for failed delivery
+  low_soc_penalty: -10.0          # Penalty for low SOC
+  high_soc_penalty: -5.0          # Penalty for overcharging
+  frequency_regulation_bonus: 5.0 # Bonus for frequency regulation
+
+# Episode Settings
+episode:
+  episode_length: 24              # Hours per episode
+  forecast_horizon: 24            # Forecast lookahead hours
+  initial_shakti_balance: 1000.0  # Initial SHAKTI tokens
+  initial_reputation: 1           # Initial reputation tier (0-4)
+
+# Action Space Configuration
+action_space:
+  use_discrete: false             # Use discrete action space
+  # Discrete action levels (if use_discrete: true)
+  quantity_levels: [-1.0, -0.5, 0.0, 0.5, 1.0]
+  price_levels: [-0.1, -0.05, 0.0, 0.05, 0.1]
+
+# Wrapper Configuration
+wrappers:
+  normalize_observation: true
+  normalize_reward: true
+  frame_stack: 0                  # Number of frames to stack (0 = disabled)
+  reward_shaping: false
+  episode_monitor: true
+
+# Training Settings
+training:
+  num_envs: 8                     # Number of parallel environments
+  seed: 42                        # Random seed
+  render_mode: null               # Render mode (null, "human", "rgb_array")

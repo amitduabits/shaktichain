@@ -1,0 +1,98 @@
+# Data configuration
+data:
+  # Collection settings
+  collection:
+    start_date: "2022-01-01"
+    end_date: "2024-12-31"
+    frequency: "1H"  # Hourly granularity
+
+  # Data sources
+  sources:
+    posoco:
+      enabled: true
+      url: "https://posoco.in/reports/"
+      regions: ["NORTHERN", "WESTERN", "SOUTHERN", "EASTERN", "NORTH_EASTERN"]
+      retry_attempts: 3
+      timeout: 30
+
+    iex:
+      enabled: true
+      url: "https://www.iexindia.com/marketdata/areaprices.aspx"
+      markets: ["DAM", "RTM"]  # Day-Ahead Market, Real-Time Market
+      retry_attempts: 3
+      timeout: 30
+
+    weather:
+      enabled: true
+      api_url: "https://api.openweathermap.org/data/2.5"
+      api_key: ${oc.env:OPENWEATHER_API_KEY,null}
+      locations:
+        - name: "Delhi"
+          lat: 28.6139
+          lon: 77.2090
+        - name: "Mumbai"
+          lat: 19.0760
+          lon: 72.8777
+        - name: "Bangalore"
+          lat: 12.9716
+          lon: 77.5946
+        - name: "Chennai"
+          lat: 13.0827
+          lon: 80.2707
+      retry_attempts: 3
+      timeout: 30
+
+    calendar:
+      enabled: true
+      country: "IN"
+      include_festivals: true
+      custom_holidays: []
+
+  # Processing settings
+  processing:
+    missing_value_strategy: "interpolate"  # interpolate, forward_fill, drop
+    outlier_detection: true
+    outlier_threshold: 3.0  # Standard deviations
+    normalization: "standard"  # standard, minmax, robust
+
+  # Feature engineering
+  features:
+    lag_features:
+      enabled: true
+      lags: [1, 2, 3, 24, 168]  # Hours
+
+    rolling_features:
+      enabled: true
+      windows: [3, 6, 12, 24]  # Hours
+      statistics: ["mean", "std", "min", "max"]
+
+    temporal_features:
+      enabled: true
+      include:
+        - hour
+        - day_of_week
+        - day_of_month
+        - month
+        - quarter
+        - is_weekend
+        - is_holiday
+        - is_festival
+
+    cyclical_encoding:
+      enabled: true
+      features: ["hour", "day_of_week", "month"]
+
+  # Train/Val/Test split
+  split:
+    method: "temporal"  # temporal, random
+    train_size: 0.7
+    val_size: 0.15
+    test_size: 0.15
+
+  # Data loader settings
+  loader:
+    batch_size: 64
+    num_workers: 4
+    pin_memory: true
+    shuffle_train: true
+    drop_last: false

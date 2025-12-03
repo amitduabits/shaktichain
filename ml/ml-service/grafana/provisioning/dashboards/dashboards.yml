@@ -1,0 +1,15 @@
+# Grafana dashboards provisioning
+
+apiVersion: 1
+
+providers:
+  - name: 'SHAKTI-CHAIN ML Dashboards'
+    orgId: 1
+    folder: 'ML Service'
+    folderUid: 'shakti-ml'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards

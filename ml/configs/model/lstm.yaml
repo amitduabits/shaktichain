@@ -1,0 +1,23 @@
+# LSTM Model Configuration
+model:
+  name: "lstm_forecaster"
+  type: "lstm"
+
+  # Architecture
+  architecture:
+    input_size: 32  # Will be set dynamically based on features
+    hidden_size: 128
+    num_layers: 2
+    dropout: 0.2
+    bidirectional: false
+
+  # Forecasting settings
+  forecasting:
+    sequence_length: 168  # 1 week of hourly data
+    prediction_horizon: 24  # Predict next 24 hours
+    target_columns: ["load", "price"]
+
+  # Output layer
+  output:
+    output_size: 24  # Prediction horizon
+    activation: null  # null for regression, softmax for classification

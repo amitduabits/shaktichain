@@ -1,0 +1,57 @@
+# Temporal Fusion Transformer Configuration
+model:
+  name: "temporal_fusion_transformer"
+  type: "tft"
+
+  # Input dimensions (will be set dynamically based on data)
+  input_dims:
+    static_input_size: 0  # Set based on static features (city, prosumer_type)
+    known_input_size: 10  # hour, day_of_week, is_holiday, weather_forecast, etc.
+    observed_input_size: 5  # historical_load, temperature, price, etc.
+
+  # Sequence lengths
+  sequence_lengths:
+    encoder_length: 168  # 1 week of hourly data
+    decoder_length: 48   # 2 days ahead prediction
+
+  # Architecture
+  architecture:
+    hidden_size: 160
+    lstm_layers: 2
+    num_attention_heads: 4
+    dropout: 0.1
+
+  # Output
+  output:
+    output_size: 1  # Number of target variables (e.g., load)
+    quantiles: [0.1, 0.5, 0.9]  # Prediction quantiles
+
+  # Forecasting settings
+  forecasting:
+    target_columns: ["load_mw"]
+
+    # Static features (if available)
+    static_features:
+      enabled: false
+      columns: []
+
+    # Known future inputs (available at prediction time)
+    known_future_features:
+      - "hour"
+      - "hour_sin"
+      - "hour_cos"
+      - "day_of_week"
+      - "day_of_week_sin"
+      - "day_of_week_cos"
+      - "is_weekend"
+      - "is_holiday"
+      - "is_peak_hour"
+      - "month_sin"
+
+    # Observed inputs (only available historically)
+    observed_features:
+      - "load_mw_lag_1h"
+      - "load_mw_lag_24h"
+      - "temperature_c_delhi"
+      - "price_inr_mwh_dam"
+      - "humidity_pct_delhi"

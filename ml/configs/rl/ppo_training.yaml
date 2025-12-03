@@ -1,0 +1,120 @@
+# PPO Training Configuration for SHAKTI-CHAIN V2G Trading Agent
+# ============================================================
+
+# Training Parameters
+total_timesteps: 10000000      # 10M total timesteps
+num_envs: 8                    # Parallel environments
+seed: 42                       # Random seed
+
+# PPO Hyperparameters
+learning_rate: 0.0003          # 3e-4 learning rate
+n_steps: 2048                  # Steps per update (rollout buffer size)
+batch_size: 64                 # Minibatch size
+n_epochs: 10                   # Epochs per update
+gamma: 0.99                    # Discount factor
+gae_lambda: 0.95               # GAE lambda
+clip_range: 0.2                # PPO clip range
+ent_coef: 0.01                 # Entropy coefficient (exploration)
+vf_coef: 0.5                   # Value function coefficient
+max_grad_norm: 0.5             # Gradient clipping
+
+# Policy Configuration
+policy: custom                 # custom or mlp
+use_discrete: false            # Continuous action space
+
+# Custom Policy Network (if policy: custom)
+policy_network:
+  forecast_horizon: 24         # Forecast sequence length
+  forecast_embed_dim: 32       # Embedding dim for forecasts
+  state_embed_dim: 32          # Embedding dim for state
+  fusion_dim: 64               # Dimension after attention fusion
+  num_attention_heads: 4       # Attention heads in fusion
+  policy_hidden_dims: [64, 64] # Actor network hidden dims
+  value_hidden_dims: [64, 64]  # Critic network hidden dims
+
+# MLP Policy Network (if policy: mlp)
+mlp_network:
+  pi: [128, 128, 64]           # Policy network architecture
+  vf: [128, 128, 64]           # Value network architecture
+
+# Curriculum Learning
+use_curriculum: true           # Enable curriculum learning
+start_stage: 0                 # Starting stage (0-3)
+
+curriculum_stages:
+  # Stage 1: Simple Market
+  - name: simple
+    min_timesteps: 100000
+    advance_threshold: 5.0
+    battery:
+      charge_efficiency: 1.0
+      discharge_efficiency: 1.0
+      degradation_per_cycle: 0.0
+    market:
+      price_volatility: 0.0
+      bid_ask_spread: 0.0
+      transaction_fee: 0.0
+
+  # Stage 2: Normal Market
+  - name: normal
+    min_timesteps: 500000
+    advance_threshold: 10.0
+    battery:
+      charge_efficiency: 0.95
+      discharge_efficiency: 0.95
+      degradation_per_cycle: 0.00005
+    market:
+      price_volatility: 0.15
+      bid_ask_spread: 0.03
+      transaction_fee: 0.005
+
+  # Stage 3: Adversarial Market
+  - name: adversarial
+    min_timesteps: 1000000
+    advance_threshold: 8.0
+    battery:
+      charge_efficiency: 0.95
+      discharge_efficiency: 0.95
+      degradation_per_cycle: 0.0001
+    market:
+      price_volatility: 0.4
+      bid_ask_spread: 0.08
+      transaction_fee: 0.01
+
+  # Stage 4: Full Complexity
+  - name: full
+    min_timesteps: 5000000
+    advance_threshold: 15.0
+    battery:
+      charge_efficiency: 0.95
+      discharge_efficiency: 0.95
+      degradation_per_cycle: 0.0001
+    market:
+      price_volatility: 0.3
+      bid_ask_spread: 0.05
+      transaction_fee: 0.01
+
+# Evaluation
+eval_freq: 50000               # Evaluate every 50k steps
+n_eval_episodes: 10            # Episodes per evaluation
+checkpoint_freq: 100000        # Save checkpoint every 100k steps
+
+# Evaluation Metrics
+eval_metric: profit            # Best model selection metric (profit, reward, roi)
+
+# Paths
+log_dir: ./logs/ppo_v2g        # TensorBoard and model logs
+resume: null                   # Path to resume training from
+
+# Hardware
+device: auto                   # auto, cpu, or cuda
+
+# Logging
+verbose: 1                     # Verbosity level (0, 1, 2)
+tensorboard: true              # Enable TensorBoard logging
+
+# Target Performance
+# ===================
+# ROI Target: >15%
+# Win Rate Target: >60%
+# Sharpe Ratio Target: >1.0

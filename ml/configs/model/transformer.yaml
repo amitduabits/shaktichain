@@ -1,0 +1,30 @@
+# Transformer Model Configuration
+model:
+  name: "transformer_forecaster"
+  type: "transformer"
+
+  # Architecture
+  architecture:
+    d_model: 128
+    nhead: 8
+    num_encoder_layers: 3
+    num_decoder_layers: 3
+    dim_feedforward: 512
+    dropout: 0.1
+    activation: "gelu"
+
+  # Forecasting settings
+  forecasting:
+    sequence_length: 168  # 1 week of hourly data
+    prediction_horizon: 24  # Predict next 24 hours
+    target_columns: ["load", "price"]
+
+  # Positional encoding
+  positional_encoding:
+    max_len: 5000
+    learnable: false
+
+  # Output layer
+  output:
+    output_size: 24
+    activation: null

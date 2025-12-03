@@ -1,0 +1,153 @@
+# Price Predictor Configuration for SHAKTI-CHAIN
+
+model:
+  name: "price_predictor"
+  type: "lstm"  # Options: lstm, transformer, ensemble
+
+  # Architecture options
+  architecture:
+    # Common settings
+    hidden_size: 128
+    dropout: 0.1
+    quantiles: [0.1, 0.5, 0.9]
+
+    # LSTM-specific
+    lstm:
+      num_layers: 2
+      bidirectional: true
+      attention_size: 64
+
+    # Transformer-specific
+    transformer:
+      d_model: 128
+      nhead: 8
+      num_encoder_layers: 4
+      dim_feedforward: 256
+      max_seq_len: 512
+
+    # MDN settings
+    mdn:
+      num_components: 3  # Normal, stressed, spike regimes
+
+  # Input dimensions (will be set from data)
+  input_dims:
+    input_size: 64  # Number of price features
+    load_forecast_size: 48  # Load forecast horizon
+
+  # Sequence lengths
+  sequence_lengths:
+    encoder_length: 168  # 1 week history
+    decoder_length: 48   # 2 days ahead
+
+  # Output
+  output:
+    output_size: 1  # Price
+    quantiles: [0.1, 0.5, 0.9]
+    include_variance: true
+    include_spike_detection: true
+    include_regime_classification: true
+
+# Training configuration
+training:
+  max_epochs: 100
+  patience: 10
+  learning_rate: 0.001
+  weight_decay: 0.00001
+  batch_size: 64
+  accumulate_grad_batches: 2
+  gradient_clip_val: 1.0
+  precision: "16-mixed"
+
+  # Optimizer
+  optimizer: "adam"
+
+  # Scheduler
+  scheduler: "onecycle"
+  scheduler_config:
+    pct_start: 0.3
+    anneal_strategy: "cos"
+    div_factor: 25.0
+    final_div_factor: 10000.0
+
+  # Loss weights
+  loss:
+    quantile_weight: 1.0
+    mdn_weight: 0.1
+    spike_weight: 2.0  # Higher weight for spike detection
+    regime_weight: 0.5
+
+# Data configuration
+data:
+  data_path: "data/processed/processed_data.parquet"
+  target_col: "price_inr_mwh"
+  load_col: "load_mw"
+
+  # Temporal splits
+  train_start: "2022-01-01"
+  train_end: "2023-12-31"
+  val_start: "2024-01-01"
+  val_end: "2024-06-30"
+  test_start: "2024-07-01"
+  test_end: "2024-12-31"
+
+  # Data loading
+  num_workers: 4
+  stride_train: 1
+  stride_val: 24
+  stride_test: 24
+
+# Feature configuration
+features:
+  # Price lag features
+  price_lags: [1, 2, 3, 6, 12, 24, 48, 168]
+
+  # Rolling windows
+  rolling_windows: [6, 12, 24, 48, 168]
+
+  # Feature groups
+  include_demand_supply: true
+  include_grid_frequency: true
+  include_fuel_prices: true
+  include_volatility: true
+  include_regime_indicators: true
+  include_load_forecast: true
+
+  # Spike threshold
+  spike_threshold_percentile: 95.0
+
+# Callbacks
+callbacks:
+  early_stopping:
+    monitor: "val_loss"
+    patience: 10
+    mode: "min"
+
+  model_checkpoint:
+    monitor: "val_mape"
+    mode: "min"
+    save_top_k: 3
+    save_last: true
+    dirpath: "checkpoints/price"
+
+# MLflow
+mlflow:
+  enabled: true
+  tracking_uri: "mlruns"
+  experiment_name: "shakti-price-predictor"
+  register_model: true
+  model_name: "shakti-price-predictor"
+
+# Target metrics
+target_metrics:
+  mape_threshold: 10.0  # MAPE < 10%
+  spike_recall_threshold: 0.80  # Spike recall > 80%
+  direction_accuracy_threshold: 65.0  # Direction > 65%
+
+# Hardware
+hardware:
+  accelerator: "auto"
+  devices: 1
+  strategy: "auto"
+
+# Seed
+seed: 42

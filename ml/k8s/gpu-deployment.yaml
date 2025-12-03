@@ -1,0 +1,157 @@
+---
+# SHAKTI-CHAIN ML Service - GPU Deployment
+# For TensorRT and CUDA-accelerated inference
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shakti-ml-service-gpu
+  namespace: shakti-chain
+  labels:
+    app: shakti-ml-service-gpu
+    tier: ml
+    accelerator: gpu
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: shakti-ml-service-gpu
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: shakti-ml-service-gpu
+        tier: ml
+        accelerator: gpu
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+    spec:
+      nodeSelector:
+        accelerator: nvidia-gpu
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: ml-service
+          image: shaktichain/ml-service:gpu-latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+              name: http
+          env:
+            - name: ENVIRONMENT
+              value: "production"
+            - name: USE_GPU
+              value: "true"
+            - name: USE_TENSORRT
+              value: "true"
+            - name: TENSORRT_PRECISION
+              value: "fp16"
+            - name: CUDA_VISIBLE_DEVICES
+              value: "0"
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: shakti-ml-secrets
+                  key: redis-url
+          resources:
+            requests:
+              memory: "4Gi"
+              cpu: "2000m"
+              nvidia.com/gpu: 1
+            limits:
+              memory: "8Gi"
+              cpu: "4000m"
+              nvidia.com/gpu: 1
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 60
+            periodSeconds: 15
+          volumeMounts:
+            - name: model-cache
+              mountPath: /app/models
+            - name: tensorrt-cache
+              mountPath: /app/.tensorrt
+      volumes:
+        - name: model-cache
+          emptyDir:
+            sizeLimit: 10Gi
+        - name: tensorrt-cache
+          emptyDir:
+            sizeLimit: 5Gi
+
+---
+# Service for GPU nodes
+apiVersion: v1
+kind: Service
+metadata:
+  name: shakti-ml-service-gpu
+  namespace: shakti-chain
+  labels:
+    app: shakti-ml-service-gpu
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8000
+      targetPort: 8000
+      protocol: TCP
+      name: http
+  selector:
+    app: shakti-ml-service-gpu
+
+---
+# HPA for GPU deployment
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: shakti-ml-service-gpu-hpa
+  namespace: shakti-chain
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: shakti-ml-service-gpu
+  minReplicas: 1
+  maxReplicas: 8
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 60
+    # GPU utilization custom metric
+    - type: Pods
+      pods:
+        metric:
+          name: nvidia_gpu_utilization
+        target:
+          type: AverageValue
+          averageValue: "80"
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 120
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 120
+    scaleDown:
+      stabilizationWindowSeconds: 600
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 300

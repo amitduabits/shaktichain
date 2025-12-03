@@ -1,0 +1,143 @@
+# SHAKTI-CHAIN TFT Training - Docker Compose Configuration
+
+version: "3.8"
+
+services:
+  # =============================================================================
+  # TFT Training Service (CPU)
+  # =============================================================================
+  tft-training:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: shakti-tft-training
+    volumes:
+      - ./data:/app/data:ro
+      - ./checkpoints:/app/checkpoints
+      - ./mlruns:/app/mlruns
+      - ./logs:/app/logs
+      - ./configs:/app/configs:ro
+    environment:
+      - PYTHONPATH=/app
+      - MLFLOW_TRACKING_URI=/app/mlruns
+    command: python scripts/train_tft.py
+    restart: "no"
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          memory: 16G
+
+  # =============================================================================
+  # TFT Training Service (GPU)
+  # =============================================================================
+  tft-training-gpu:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: gpu-runtime
+    container_name: shakti-tft-training-gpu
+    volumes:
+      - ./data:/app/data:ro
+      - ./checkpoints:/app/checkpoints
+      - ./mlruns:/app/mlruns
+      - ./logs:/app/logs
+      - ./configs:/app/configs:ro
+    environment:
+      - PYTHONPATH=/app
+      - MLFLOW_TRACKING_URI=/app/mlruns
+      - CUDA_VISIBLE_DEVICES=0
+    command: python scripts/train_tft.py
+    restart: "no"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  # =============================================================================
+  # Hyperparameter Search Service
+  # =============================================================================
+  tft-hypersearch:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: shakti-tft-hypersearch
+    volumes:
+      - ./data:/app/data:ro
+      - ./checkpoints:/app/checkpoints
+      - ./mlruns:/app/mlruns
+      - ./logs:/app/logs
+      - ./configs:/app/configs
+      - optuna-db:/app/optuna
+    environment:
+      - PYTHONPATH=/app
+      - MLFLOW_TRACKING_URI=/app/mlruns
+    command: >
+      python scripts/hyperparameter_search.py
+      --study-name tft_tuning
+      --storage sqlite:///optuna/optuna.db
+      --n-trials 50
+      --max-epochs 30
+    restart: "no"
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          memory: 16G
+
+  # =============================================================================
+  # MLflow Tracking Server
+  # =============================================================================
+  mlflow:
+    image: python:3.10-slim
+    container_name: shakti-mlflow
+    volumes:
+      - ./mlruns:/mlruns
+      - ./mlartifacts:/mlartifacts
+    ports:
+      - "5000:5000"
+    environment:
+      - MLFLOW_TRACKING_URI=/mlruns
+    command: >
+      bash -c "pip install mlflow &&
+               mlflow server
+               --backend-store-uri /mlruns
+               --default-artifact-root /mlartifacts
+               --host 0.0.0.0
+               --port 5000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # =============================================================================
+  # Optuna Dashboard
+  # =============================================================================
+  optuna-dashboard:
+    image: python:3.10-slim
+    container_name: shakti-optuna-dashboard
+    volumes:
+      - optuna-db:/app/optuna
+    ports:
+      - "8080:8080"
+    command: >
+      bash -c "pip install optuna-dashboard &&
+               optuna-dashboard sqlite:///app/optuna/optuna.db --host 0.0.0.0 --port 8080"
+    restart: unless-stopped
+    depends_on:
+      - tft-hypersearch
+
+volumes:
+  optuna-db:
+    driver: local
+
+networks:
+  default:
+    name: shakti-network

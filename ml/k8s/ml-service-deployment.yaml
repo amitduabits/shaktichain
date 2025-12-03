@@ -1,0 +1,280 @@
+---
+# SHAKTI-CHAIN ML Service Kubernetes Deployment
+# Optimized for horizontal scaling and high availability
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shakti-ml-service
+  namespace: shakti-chain
+  labels:
+    app: shakti-ml-service
+    tier: ml
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: shakti-ml-service
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: shakti-ml-service
+        tier: ml
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: shakti-ml-service
+                topologyKey: kubernetes.io/hostname
+      containers:
+        - name: ml-service
+          image: shaktichain/ml-service:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+              name: http
+              protocol: TCP
+          env:
+            - name: ENVIRONMENT
+              value: "production"
+            - name: LOG_LEVEL
+              value: "INFO"
+            - name: WORKERS
+              value: "4"
+            - name: MODEL_CACHE_SIZE_MB
+              value: "2000"
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: shakti-ml-secrets
+                  key: redis-url
+            - name: MLFLOW_TRACKING_URI
+              valueFrom:
+                configMapKeyRef:
+                  name: shakti-ml-config
+                  key: mlflow-uri
+            - name: ENABLE_PROFILING
+              value: "true"
+            - name: BATCH_TIMEOUT_MS
+              value: "10"
+            - name: MAX_BATCH_SIZE
+              value: "32"
+          resources:
+            requests:
+              memory: "2Gi"
+              cpu: "1000m"
+            limits:
+              memory: "4Gi"
+              cpu: "2000m"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            successThreshold: 1
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          volumeMounts:
+            - name: model-cache
+              mountPath: /app/models
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: model-cache
+          emptyDir:
+            sizeLimit: 5Gi
+        - name: tmp
+          emptyDir:
+            sizeLimit: 1Gi
+      terminationGracePeriodSeconds: 30
+
+---
+# Service for internal cluster communication
+apiVersion: v1
+kind: Service
+metadata:
+  name: shakti-ml-service
+  namespace: shakti-chain
+  labels:
+    app: shakti-ml-service
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8000
+      targetPort: 8000
+      protocol: TCP
+      name: http
+  selector:
+    app: shakti-ml-service
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 3600
+
+---
+# Horizontal Pod Autoscaler
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: shakti-ml-service-hpa
+  namespace: shakti-chain
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: shakti-ml-service
+  minReplicas: 3
+  maxReplicas: 20
+  metrics:
+    # Scale based on CPU utilization
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    # Scale based on memory utilization
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+    # Scale based on requests per second (custom metric)
+    - type: Pods
+      pods:
+        metric:
+          name: http_requests_per_second
+        target:
+          type: AverageValue
+          averageValue: "100"
+    # Scale based on inference latency (custom metric)
+    - type: Pods
+      pods:
+        metric:
+          name: inference_latency_p99_ms
+        target:
+          type: AverageValue
+          averageValue: "100"
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 60
+        - type: Pods
+          value: 4
+          periodSeconds: 60
+      selectPolicy: Max
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 25
+          periodSeconds: 120
+      selectPolicy: Min
+
+---
+# Pod Disruption Budget for high availability
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: shakti-ml-service-pdb
+  namespace: shakti-chain
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: shakti-ml-service
+
+---
+# ConfigMap for ML service configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: shakti-ml-config
+  namespace: shakti-chain
+data:
+  mlflow-uri: "http://mlflow-service:5000"
+  model-registry-path: "/models"
+
+  # Performance targets (in ms)
+  target-forecast-load-p99: "500"
+  target-forecast-price-p99: "200"
+  target-trading-action-p99: "100"
+  target-anomaly-score-p99: "150"
+
+  # Caching configuration
+  cache-ttl-seconds: "300"
+  cache-max-entries: "10000"
+
+  # Batching configuration
+  batching-enabled: "true"
+  batch-timeout-ms: "10"
+  max-batch-size: "32"
+
+---
+# ServiceMonitor for Prometheus scraping
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: shakti-ml-service-monitor
+  namespace: shakti-chain
+  labels:
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: shakti-ml-service
+  endpoints:
+    - port: http
+      interval: 15s
+      path: /metrics
+
+---
+# Vertical Pod Autoscaler (optional, for resource right-sizing)
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: shakti-ml-service-vpa
+  namespace: shakti-chain
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: shakti-ml-service
+  updatePolicy:
+    updateMode: "Auto"
+  resourcePolicy:
+    containerPolicies:
+      - containerName: ml-service
+        minAllowed:
+          cpu: "500m"
+          memory: "1Gi"
+        maxAllowed:
+          cpu: "4000m"
+          memory: "8Gi"
+        controlledResources: ["cpu", "memory"]
