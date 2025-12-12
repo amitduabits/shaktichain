@@ -1,0 +1,38 @@
+# Supply Shock Scenario Configuration
+# Sudden reduction in available supply
+
+scenario:
+  name: "supply_shock"
+  description: "Sudden supply reduction simulating grid failure or generation outage"
+
+demand:
+  pattern: "diurnal"
+  base_load_kwh: 1000
+  peak_multiplier: 1.5
+  trough_multiplier: 0.6
+  volatility: 0.15
+  noise_type: "gaussian"
+
+supply:
+  renewable_fraction: 0.3
+  intermittency_factor: 0.3  # High variability
+
+  # Shock event
+  shock_event:
+    enabled: true
+    type: "step_reduction"
+    magnitude: 0.4  # 40% supply reduction
+    onset_time_hours: 4
+    duration_hours: 2
+    recovery_type: "gradual"
+    recovery_time_hours: 1
+
+market_conditions:
+  liquidity: "stressed"
+  spread_percent: 20.0
+  order_arrival_rate: 15
+  participation_rate: 0.9
+  panic_selling_factor: 1.3
+
+duration_hours: 12
+warmup_periods: 10

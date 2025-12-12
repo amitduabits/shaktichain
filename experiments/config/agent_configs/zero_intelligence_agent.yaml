@@ -1,0 +1,47 @@
+# Zero Intelligence Agent Configuration
+# Random bidding agent (Gode & Sunder, 1993)
+
+agent_type: "zero_intelligence"
+description: "Agent that submits random bids within budget constraints"
+
+parameters:
+  # ZI-C (Zero Intelligence Constrained) vs ZI-U (Unconstrained)
+  variant: "ZI-C"  # "ZI-C" or "ZI-U"
+
+  # Price distribution
+  price_distribution:
+    type: "uniform"  # "uniform", "normal", "truncated_normal"
+    # For uniform: uses market min/max
+    # For normal: uses parameters below
+    mean_factor: 1.0  # Multiplier of fair price
+    std_factor: 0.2
+
+  # Quantity distribution
+  quantity_distribution:
+    type: "uniform"
+    min_kwh: 0.5
+    max_kwh: 10.0
+
+  # Budget constraint (ZI-C)
+  budget_constraint:
+    enabled: true  # If false, becomes ZI-U
+    buyer_max_price: "value_per_kwh"
+    seller_min_price: "cost_per_kwh"
+
+behavior:
+  # Bid submission
+  bid_probability: 0.8
+
+  # Side selection
+  side_selection:
+    method: "soc_based"  # "random", "soc_based", "fixed"
+    sell_threshold_soc: 0.7
+    buy_threshold_soc: 0.4
+
+  # No learning
+  learning: false
+  memory: false
+
+constraints:
+  # No strategic constraints
+  none: true

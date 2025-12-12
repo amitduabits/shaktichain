@@ -1,0 +1,75 @@
+# Adversarial Agent Configuration
+# Strategic manipulator implementing various attack strategies
+
+agent_type: "adversarial"
+description: "Agent implementing market manipulation strategies"
+
+parameters:
+  # Attack strategy selection
+  primary_strategy:
+    type: "choice"
+    options:
+      - "spoofing"
+      - "wash_trading"
+      - "quote_stuffing"
+      - "price_manipulation"
+      - "layering"
+    default: "spoofing"
+
+  # Strategy parameters
+  spoofing:
+    description: "Place large orders with intent to cancel"
+    fake_order_size_multiplier: 5.0
+    cancel_probability: 0.95
+    cancel_delay_ms: 500
+    detection_avoidance:
+      vary_order_sizes: true
+      vary_timing: true
+
+  wash_trading:
+    description: "Self-trading to create false volume"
+    trade_frequency: 0.3
+    volume_inflation_factor: 2.0
+    price_deviation_percent: 0.5
+    colluding_accounts: 3
+
+  quote_stuffing:
+    description: "High-frequency order submission to slow others"
+    orders_per_second: 100
+    order_lifetime_ms: 50
+    price_spread_percent: 10.0
+
+  price_manipulation:
+    description: "Strategic bidding to move market price"
+    target_price_deviation: 0.1  # 10% from fair value
+    accumulation_phase_periods: 10
+    manipulation_phase_periods: 5
+    exit_phase_periods: 3
+
+  layering:
+    description: "Multiple orders at different prices to create false depth"
+    num_layers: 5
+    layer_size_decay: 0.7
+    price_increment_percent: 0.5
+
+behavior:
+  # Detection evasion
+  detection_evasion:
+    enabled: true
+    randomize_timing: true
+    timing_jitter_ms: 100
+    vary_quantities: true
+    rotate_strategies: true
+
+  # Profit taking
+  profit_target_percent: 5.0
+  stop_loss_percent: 10.0
+
+  # Risk management
+  max_exposure_kwh: 100.0
+
+constraints:
+  # Budget for manipulation
+  manipulation_budget_tokens: 1000
+  max_daily_orders: 10000
+  max_open_orders: 100

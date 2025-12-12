@@ -1,0 +1,217 @@
+% LaTeX Table Templates for SHAKTI-CHAIN Publication
+% Include with: \input{tables.tex}
+
+% ============================================================
+% HYPOTHESIS RESULTS TABLE
+% ============================================================
+% Usage: Use within document after defining data
+%
+% Example:
+% \hypothesistable{Domain Name}{tab:domain1}{
+%   H1.1 & Description & t-test & 2.45 & 0.012 & Supported \\
+%   H1.2 & Description & t-test & 1.23 & 0.089 & Not Supp. \\
+% }
+
+\newcommand{\hypothesistable}[3]{
+\begin{table}[htbp]
+    \centering
+    \caption{Hypothesis test results for #1}
+    \label{#2}
+    \small
+    \begin{tabular}{@{}lp{2.5cm}lrrr@{}}
+        \toprule
+        \textbf{ID} & \textbf{Hypothesis} & \textbf{Test} & \textbf{Stat.} & \textbf{p-value} & \textbf{Decision} \\
+        \midrule
+        #3
+        \bottomrule
+    \end{tabular}
+\end{table}
+}
+
+% ============================================================
+% SUMMARY STATISTICS TABLE
+% ============================================================
+% Usage:
+% \summarystats{Metric Name}{tab:summary}{
+%   n & Mean & SD & Min & Q1 & Median & Q3 & Max \\
+%   100 & 0.85 & 0.12 & 0.45 & 0.78 & 0.86 & 0.92 & 0.99 \\
+% }
+
+\newcommand{\summarystats}[3]{
+\begin{table}[htbp]
+    \centering
+    \caption{Summary statistics for #1}
+    \label{#2}
+    \small
+    \begin{tabular}{@{}rrrrrrrr@{}}
+        \toprule
+        \textbf{n} & \textbf{Mean} & \textbf{SD} & \textbf{Min} & \textbf{Q1} & \textbf{Median} & \textbf{Q3} & \textbf{Max} \\
+        \midrule
+        #3
+        \bottomrule
+    \end{tabular}
+\end{table}
+}
+
+% ============================================================
+% SYSTEM COMPARISON TABLE
+% ============================================================
+% Multi-system comparison with best values highlighted
+%
+% Usage:
+% \comparisonTable{tab:comparison}{
+%   Metric & SHAKTI & Fixed & Uniform & CDA \\
+%   Efficiency & \textbf{0.94} & 0.78 & 0.82 & 0.89 \\
+%   Fairness & \textbf{0.91} & 0.65 & 0.72 & 0.85 \\
+% }
+
+\newcommand{\comparisonTable}[2]{
+\begin{table}[htbp]
+    \centering
+    \caption{System comparison across key metrics. Bold indicates best performance.}
+    \label{#1}
+    \begin{tabular}{@{}lcccc@{}}
+        \toprule
+        \textbf{Metric} & \textbf{SHAKTI} & \textbf{Fixed} & \textbf{Uniform} & \textbf{CDA} \\
+        \midrule
+        #2
+        \bottomrule
+    \end{tabular}
+\end{table}
+}
+
+% ============================================================
+% DOMAIN SUMMARY TABLE
+% ============================================================
+% Overview of results by domain
+
+\newcommand{\domainsummary}[2]{
+\begin{table}[htbp]
+    \centering
+    \caption{Summary of hypothesis test results by research domain}
+    \label{#1}
+    \begin{tabular}{@{}lcccr@{}}
+        \toprule
+        \textbf{Domain} & \textbf{Tested} & \textbf{Supported} & \textbf{Failed} & \textbf{Rate} \\
+        \midrule
+        #2
+        \bottomrule
+    \end{tabular}
+\end{table}
+}
+
+% ============================================================
+% EFFECT SIZE TABLE
+% ============================================================
+% Table for reporting effect sizes with confidence intervals
+
+\newcommand{\effectsizetable}[2]{
+\begin{table}[htbp]
+    \centering
+    \caption{Effect sizes with 95\% confidence intervals}
+    \label{#1}
+    \small
+    \begin{tabular}{@{}llrrl@{}}
+        \toprule
+        \textbf{Hypothesis} & \textbf{Measure} & \textbf{Effect} & \textbf{95\% CI} & \textbf{Interpretation} \\
+        \midrule
+        #2
+        \bottomrule
+    \end{tabular}
+\end{table}
+}
+
+% ============================================================
+% POWER ANALYSIS TABLE
+% ============================================================
+
+\newcommand{\poweranalysis}[2]{
+\begin{table}[htbp]
+    \centering
+    \caption{Statistical power analysis results}
+    \label{#1}
+    \small
+    \begin{tabular}{@{}lrrrr@{}}
+        \toprule
+        \textbf{Test} & \textbf{n} & \textbf{Effect (d)} & \textbf{$\alpha$} & \textbf{Power} \\
+        \midrule
+        #2
+        \bottomrule
+    \end{tabular}
+\end{table}
+}
+
+% ============================================================
+% CRITICAL FAILURES TABLE
+% ============================================================
+
+\newcommand{\criticalfailures}[2]{
+\begin{table}[htbp]
+    \centering
+    \caption{Critical hypothesis failures requiring attention}
+    \label{#1}
+    \small
+    \begin{tabular}{@{}llp{4cm}l@{}}
+        \toprule
+        \textbf{ID} & \textbf{Domain} & \textbf{Issue} & \textbf{Priority} \\
+        \midrule
+        #2
+        \bottomrule
+    \end{tabular}
+\end{table}
+}
+
+% ============================================================
+% STYLING COMMANDS
+% ============================================================
+
+% Highlight significant p-values
+\newcommand{\sigp}[1]{\textbf{#1}}
+
+% Highlight supported hypotheses
+\newcommand{\supported}{\textcolor{shaktigreen}{Supported}}
+\newcommand{\notsupported}{\textcolor{shaktired}{Not Supp.}}
+
+% Effect size interpretation
+\newcommand{\smalleffect}{Small}
+\newcommand{\mediumeffect}{\textbf{Medium}}
+\newcommand{\largeeffect}{\textbf{\textcolor{shaktiblue}{Large}}}
+
+% ============================================================
+% LANDSCAPE TABLE ENVIRONMENT
+% ============================================================
+% For wide tables that need landscape orientation
+
+\usepackage{pdflscape}
+
+\newenvironment{landscapetable}{%
+    \begin{landscape}
+    \centering
+}{%
+    \end{landscape}
+}
+
+% ============================================================
+% MULTI-PAGE TABLE SUPPORT
+% ============================================================
+\usepackage{longtable}
+
+% Example usage:
+% \begin{longtable}{@{}lp{3cm}lrrr@{}}
+%     \caption{Full hypothesis results} \label{tab:full_results} \\
+%     \toprule
+%     ID & Hypothesis & Test & Stat. & p-value & Decision \\
+%     \midrule
+%     \endfirsthead
+%     \multicolumn{6}{c}{\tablename\ \thetable{} -- continued} \\
+%     \toprule
+%     ID & Hypothesis & Test & Stat. & p-value & Decision \\
+%     \midrule
+%     \endhead
+%     \midrule
+%     \multicolumn{6}{r}{Continued on next page...} \\
+%     \endfoot
+%     \bottomrule
+%     \endlastfoot
+%     % Data rows here
+% \end{longtable}

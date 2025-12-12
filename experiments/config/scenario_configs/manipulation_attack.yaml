@@ -1,0 +1,82 @@
+# Manipulation Attack Scenario Configuration
+# Coordinated attack on market integrity
+
+scenario:
+  name: "manipulation_attack"
+  description: "Coordinated market manipulation attack for resilience testing"
+
+demand:
+  pattern: "diurnal"
+  base_load_kwh: 1000
+  peak_multiplier: 1.5
+  trough_multiplier: 0.6
+  volatility: 0.1
+  noise_type: "gaussian"
+
+supply:
+  renewable_fraction: 0.3
+  intermittency_factor: 0.15
+
+market_conditions:
+  liquidity: "variable"
+  spread_percent: 10.0
+  order_arrival_rate: 20
+  participation_rate: 0.85
+
+# Attack configuration
+attack:
+  enabled: true
+
+  # Attacker profile
+  attacker:
+    agent_type: "adversarial"
+    count: 10  # Number of colluding attackers
+    capital_tokens: 10000
+    coordination: "centralized"
+
+  # Attack phases
+  phases:
+    - name: "reconnaissance"
+      start_hour: 0
+      duration_hours: 2
+      activity: "passive_observation"
+
+    - name: "accumulation"
+      start_hour: 2
+      duration_hours: 3
+      activity: "gradual_position_building"
+      target_position_kwh: 500
+
+    - name: "manipulation"
+      start_hour: 5
+      duration_hours: 2
+      activity: "price_pump"
+      strategies:
+        - "spoofing"
+        - "wash_trading"
+      target_price_change: 0.3  # 30% increase
+
+    - name: "exit"
+      start_hour: 7
+      duration_hours: 1
+      activity: "position_liquidation"
+
+  # Attack strategies
+  strategies:
+    spoofing:
+      enabled: true
+      intensity: "high"
+
+    wash_trading:
+      enabled: true
+      volume_multiplier: 3.0
+
+    quote_stuffing:
+      enabled: false
+
+    layering:
+      enabled: true
+      layers: 10
+
+duration_hours: 12
+warmup_periods: 10

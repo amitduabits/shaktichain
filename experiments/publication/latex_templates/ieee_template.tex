@@ -1,0 +1,144 @@
+% IEEE Conference/Journal Template for SHAKTI-CHAIN
+% Use with: pdflatex report.tex
+
+\documentclass[conference]{IEEEtran}
+
+% Essential packages
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{hyperref}
+\usepackage{cite}
+\usepackage{array}
+\usepackage{subcaption}
+
+% Custom colors for SHAKTI-CHAIN
+\definecolor{shaktigreen}{RGB}{46, 204, 113}
+\definecolor{shaktired}{RGB}{231, 76, 60}
+\definecolor{shaktiblue}{RGB}{52, 152, 219}
+
+% Hyperref setup
+\hypersetup{
+    colorlinks=true,
+    linkcolor=shaktiblue,
+    citecolor=shaktiblue,
+    urlcolor=shaktiblue,
+}
+
+% Custom commands
+\newcommand{\shakti}{\textsc{Shakti-Chain}}
+\newcommand{\pvalue}{p\text{-value}}
+\newcommand{\effect}{\eta^2}
+
+% Title
+\title{% raw %}{{ title }}{% endraw %}
+
+% Authors (Jinja2 template)
+{% raw %}{% for author in authors %}{% endraw %}
+\author{\IEEEauthorblockN{% raw %}{{ author.name }}{% endraw %}
+\IEEEauthorblockA{\textit{% raw %}{{ author.affiliation }}{% endraw %} \\
+{% raw %}{{ author.email }}{% endraw %}}}
+{% raw %}{% endfor %}{% endraw %}
+
+\begin{document}
+
+\maketitle
+
+% Abstract
+\begin{abstract}
+{% raw %}{{ abstract }}{% endraw %}
+\end{abstract}
+
+% Keywords
+\begin{IEEEkeywords}
+{% raw %}{{ keywords | join(', ') }}{% endraw %}
+\end{IEEEkeywords}
+
+% ============================================================
+% INTRODUCTION
+% ============================================================
+\section{Introduction}
+\label{sec:introduction}
+
+{% raw %}{{ sections.introduction }}{% endraw %}
+
+% ============================================================
+% RELATED WORK
+% ============================================================
+\section{Related Work}
+\label{sec:related}
+
+{% raw %}{{ sections.related_work }}{% endraw %}
+
+% ============================================================
+% SYSTEM DESIGN
+% ============================================================
+\section{System Design}
+\label{sec:design}
+
+{% raw %}{{ sections.system_design }}{% endraw %}
+
+% ============================================================
+% METHODOLOGY
+% ============================================================
+\section{Methodology}
+\label{sec:methodology}
+
+{% raw %}{{ sections.methodology }}{% endraw %}
+
+% ============================================================
+% RESULTS
+% ============================================================
+\section{Results}
+\label{sec:results}
+
+{% raw %}{{ sections.results }}{% endraw %}
+
+% ============================================================
+% DISCUSSION
+% ============================================================
+\section{Discussion}
+\label{sec:discussion}
+
+{% raw %}{{ sections.discussion }}{% endraw %}
+
+% ============================================================
+% CONCLUSION
+% ============================================================
+\section{Conclusion}
+\label{sec:conclusion}
+
+{% raw %}{{ sections.conclusion }}{% endraw %}
+
+% ============================================================
+% ACKNOWLEDGMENTS
+% ============================================================
+\section*{Acknowledgment}
+
+{% raw %}{{ acknowledgments }}{% endraw %}
+
+% ============================================================
+% REFERENCES
+% ============================================================
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+% ============================================================
+% APPENDIX (if needed)
+% ============================================================
+{% raw %}{% if appendices %}{% endraw %}
+\appendix
+{% raw %}{% for appendix in appendices %}{% endraw %}
+\section{% raw %}{{ appendix.title }}{% endraw %}
+\label{sec:appendix_{% raw %}{{ loop.index }}{% endraw %}}
+
+{% raw %}{{ appendix.content }}{% endraw %}
+
+{% raw %}{% endfor %}{% endraw %}
+{% raw %}{% endif %}{% endraw %}
+
+\end{document}

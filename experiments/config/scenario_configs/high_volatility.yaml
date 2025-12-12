@@ -1,0 +1,40 @@
+# High Volatility Scenario Configuration
+# Unstable market with rapid price changes
+
+scenario:
+  name: "high_volatility"
+  description: "Highly volatile market conditions with rapid price swings"
+
+demand:
+  pattern: "volatile"
+  base_load_kwh: 1000
+  peak_multiplier: 2.0
+  trough_multiplier: 0.4
+  volatility: 0.35
+  noise_type: "jump_diffusion"
+
+  # Jump process parameters
+  jump_intensity: 0.1  # jumps per period
+  jump_mean: 0.0
+  jump_std: 0.3
+
+supply:
+  renewable_fraction: 0.5  # High renewable = high variability
+  intermittency_factor: 0.4
+
+  # Cloud cover effects
+  weather_volatility: true
+  cloud_cover_transitions: 5  # per hour
+
+market_conditions:
+  liquidity: "fragmented"
+  spread_percent: 25.0
+  order_arrival_rate: 30
+  participation_rate: 0.7  # Some exit due to volatility
+
+  # Volatility clustering
+  garch_effects: true
+  volatility_persistence: 0.85
+
+duration_hours: 24
+warmup_periods: 20

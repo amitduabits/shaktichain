@@ -1,0 +1,33 @@
+# Peak Demand Scenario Configuration
+# Extreme demand conditions (summer afternoon in Delhi)
+
+scenario:
+  name: "peak_demand"
+  description: "Extreme peak demand during summer afternoon"
+
+demand:
+  pattern: "sustained_peak"
+  base_load_kwh: 1000
+  peak_multiplier: 2.5
+  trough_multiplier: 1.2
+  volatility: 0.2
+  noise_type: "gaussian"
+  # AC load surge
+  temperature_driven: true
+  temperature_c: 45
+
+supply:
+  renewable_fraction: 0.4  # Solar at peak
+  intermittency_factor: 0.1
+  scheduled_outages: false
+  grid_stress_probability: 0.1
+
+market_conditions:
+  liquidity: "tight"
+  spread_percent: 15.0
+  order_arrival_rate: 25
+  participation_rate: 0.95
+  price_premium_factor: 1.5
+
+duration_hours: 6
+warmup_periods: 5

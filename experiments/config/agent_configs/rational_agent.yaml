@@ -1,0 +1,51 @@
+# Rational Agent Configuration
+# Utility-maximizing agent with full information
+
+agent_type: "rational"
+description: "Fully rational agent that maximizes expected utility"
+
+parameters:
+  # Risk aversion coefficient (CARA utility)
+  risk_aversion:
+    distribution: "uniform"
+    min: 0.0
+    max: 2.0
+    default: 1.0
+
+  # Information processing
+  full_information: true
+  market_memory_periods: 100
+
+  # Bidding strategy
+  bid_shading:
+    enabled: true
+    factor_min: 0.8
+    factor_max: 1.0
+
+  # Utility function type
+  utility_function: "CARA"  # Constant Absolute Risk Aversion
+
+  # Learning parameters
+  learning_rate: 0.1
+  discount_factor: 0.95
+
+  # Strategic behavior
+  price_prediction:
+    method: "exponential_smoothing"
+    alpha: 0.3
+
+behavior:
+  # Bid timing
+  bid_probability: 1.0  # Always bids when opportunity exists
+
+  # Response to losses
+  loss_aversion_factor: 1.0  # No loss aversion (purely rational)
+
+  # Competitive response
+  undercut_strategy: true
+  undercut_margin_percent: 1.0
+
+constraints:
+  max_position_kwh: 50.0
+  min_profit_margin_percent: 0.0
+  max_consecutive_trades: 10

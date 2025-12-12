@@ -1,0 +1,38 @@
+# Continuous Double Auction Baseline Configuration
+# Standard CDA as used in stock exchanges
+
+baseline:
+  name: "continuous_double_auction"
+  description: "Continuous double auction with immediate order matching"
+
+mechanism:
+  type: "continuous_double_auction"
+
+  # Matching rules
+  price_priority: true  # Best price first
+  time_priority: true   # FIFO at same price
+
+  # Trade execution
+  execution_price: "aggressor_price"  # "aggressor_price", "passive_price", "midpoint"
+  # Aggressor price: Incoming order sets the price
+
+  # Order types
+  allowed_order_types:
+    - "limit"
+    - "market"
+    - "immediate_or_cancel"
+    - "fill_or_kill"
+
+  # Order book
+  order_book:
+    visible_depth: 10
+    hidden_orders: false
+
+  # Minimum tick size
+  tick_size: 0.01
+
+properties:
+  budget_balanced: true
+  individually_rational: true
+  incentive_compatible: false
+  # CDA does not maximize welfare - depends on order arrival

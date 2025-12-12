@@ -1,0 +1,77 @@
+# Behavioral Agent Configuration
+# Agent following prospect theory (Kahneman & Tversky)
+
+agent_type: "behavioral"
+description: "Agent exhibiting behavioral biases from prospect theory"
+
+parameters:
+  # Prospect theory parameters (Tversky & Kahneman, 1992)
+  loss_aversion:
+    description: "Lambda - loss aversion coefficient"
+    distribution: "normal"
+    mean: 2.25
+    std: 0.5
+    min: 1.0
+    max: 4.0
+
+  diminishing_sensitivity:
+    description: "Alpha - curvature of value function"
+    distribution: "normal"
+    mean: 0.88
+    std: 0.1
+    min: 0.5
+    max: 1.0
+
+  probability_weighting:
+    description: "Gamma - probability weighting parameter"
+    distribution: "normal"
+    mean: 0.61
+    std: 0.1
+    min: 0.3
+    max: 0.9
+
+  # Reference point
+  reference_point:
+    method: "adaptive"  # "fixed", "adaptive", "status_quo"
+    adaptation_rate: 0.1
+    initial: 0.0
+
+  # Mental accounting
+  mental_accounting:
+    enabled: true
+    separate_gains_losses: true
+
+behavior:
+  # Framing effects
+  framing_sensitivity: 0.3
+
+  # Endowment effect
+  endowment_effect:
+    enabled: true
+    factor: 1.5  # WTA/WTP ratio
+
+  # Anchoring
+  anchoring:
+    enabled: true
+    weight: 0.4
+    anchor_source: "last_price"
+
+  # Herding behavior
+  herding:
+    enabled: true
+    influence_weight: 0.2
+
+  # Overconfidence
+  overconfidence:
+    enabled: true
+    factor: 1.2
+
+  # Recency bias
+  recency_bias:
+    enabled: true
+    decay_rate: 0.8
+
+constraints:
+  # Emotional trading limits
+  max_regret_tolerance: 0.3
+  cooling_off_after_loss: 2  # periods

@@ -1,0 +1,28 @@
+# Normal Demand Scenario Configuration
+# Typical day-to-day market conditions
+
+scenario:
+  name: "normal_demand"
+  description: "Standard market conditions with typical demand patterns"
+
+demand:
+  pattern: "diurnal"
+  base_load_kwh: 1000
+  peak_multiplier: 1.5
+  trough_multiplier: 0.6
+  volatility: 0.1
+  noise_type: "gaussian"
+
+supply:
+  renewable_fraction: 0.3
+  intermittency_factor: 0.15
+  scheduled_outages: false
+
+market_conditions:
+  liquidity: "normal"
+  spread_percent: 5.0
+  order_arrival_rate: 10  # orders per minute
+  participation_rate: 0.8
+
+duration_hours: 24
+warmup_periods: 10

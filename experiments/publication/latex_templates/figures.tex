@@ -1,0 +1,234 @@
+% LaTeX Figure Templates for SHAKTI-CHAIN Publication
+% Include with: \input{figures.tex}
+
+% Required packages (should be in main document)
+% \usepackage{graphicx}
+% \usepackage{subcaption}
+% \usepackage{tikz}
+% \usepackage{pgfplots}
+
+% ============================================================
+% FIGURE PATHS
+% ============================================================
+\graphicspath{{figures/}{./figures/}{../figures/}}
+
+% ============================================================
+% SINGLE COLUMN FIGURE
+% ============================================================
+% Usage: \singlefig{filename}{caption}{label}
+
+\newcommand{\singlefig}[3]{
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\columnwidth]{#1}
+    \caption{#2}
+    \label{#3}
+\end{figure}
+}
+
+% ============================================================
+% DOUBLE COLUMN FIGURE
+% ============================================================
+% Usage: \doublefig{filename}{caption}{label}
+
+\newcommand{\doublefig}[3]{
+\begin{figure*}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{#1}
+    \caption{#2}
+    \label{#3}
+\end{figure*}
+}
+
+% ============================================================
+% SIDE-BY-SIDE FIGURES
+% ============================================================
+% Usage: \sidebyside{file1}{cap1}{lab1}{file2}{cap2}{lab2}{main_caption}{main_label}
+
+\newcommand{\sidebyside}[8]{
+\begin{figure}[htbp]
+    \centering
+    \begin{subfigure}[b]{0.48\columnwidth}
+        \centering
+        \includegraphics[width=\textwidth]{#1}
+        \caption{#2}
+        \label{#3}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\columnwidth}
+        \centering
+        \includegraphics[width=\textwidth]{#4}
+        \caption{#5}
+        \label{#6}
+    \end{subfigure}
+    \caption{#7}
+    \label{#8}
+\end{figure}
+}
+
+% ============================================================
+% THREE PANEL FIGURE
+% ============================================================
+% Usage: \threepanel{f1}{c1}{l1}{f2}{c2}{l2}{f3}{c3}{l3}{main_cap}{main_lab}
+
+\newcommand{\threepanel}[2]{
+\begin{figure*}[htbp]
+    \centering
+    #1
+    \caption{#2}
+\end{figure*}
+}
+
+% ============================================================
+% HYPOTHESIS SUMMARY BAR CHART (TikZ)
+% ============================================================
+% Requires: \usepackage{pgfplots}
+% Usage: Include data directly in document
+
+% Example:
+% \begin{figure}[htbp]
+%     \centering
+%     \begin{tikzpicture}
+%         \begin{axis}[
+%             ybar stacked,
+%             bar width=15pt,
+%             symbolic x coords={Domain1, Domain2, Domain3},
+%             xtick=data,
+%             xlabel={Research Domain},
+%             ylabel={Number of Hypotheses},
+%             legend style={at={(0.5,-0.15)}, anchor=north},
+%         ]
+%             \addplot[fill=shaktigreen] coordinates {(Domain1,8) (Domain2,9) (Domain3,7)};
+%             \addplot[fill=shaktired] coordinates {(Domain1,2) (Domain2,3) (Domain3,3)};
+%             \legend{Supported, Not Supported}
+%         \end{axis}
+%     \end{tikzpicture}
+%     \caption{Summary of hypothesis test results by domain.}
+%     \label{fig:hypothesis_summary}
+% \end{figure}
+
+% ============================================================
+% BOX PLOT TEMPLATE
+% ============================================================
+% For efficiency comparisons - use with pgfplots
+
+% Example:
+% \begin{figure}[htbp]
+%     \centering
+%     \begin{tikzpicture}
+%         \begin{axis}[
+%             boxplot/draw direction=y,
+%             xtick={1,2,3,4},
+%             xticklabels={SHAKTI, Fixed, Uniform, CDA},
+%             ylabel={Efficiency},
+%         ]
+%             \addplot+[boxplot prepared={
+%                 median=0.94,
+%                 upper quartile=0.96,
+%                 lower quartile=0.91,
+%                 upper whisker=0.99,
+%                 lower whisker=0.85
+%             }] coordinates {};
+%             % Add more systems...
+%         \end{axis}
+%     \end{tikzpicture}
+%     \caption{Efficiency comparison across trading mechanisms.}
+%     \label{fig:efficiency_box}
+% \end{figure}
+
+% ============================================================
+% SCALABILITY PLOT (LOG-LOG)
+% ============================================================
+% For showing O(n log n) scaling behavior
+
+% Example:
+% \begin{figure}[htbp]
+%     \centering
+%     \begin{tikzpicture}
+%         \begin{loglogaxis}[
+%             xlabel={Number of Agents},
+%             ylabel={Clearing Time (ms)},
+%             legend pos=north west,
+%         ]
+%             \addplot[only marks, mark=*] table {data/scalability.dat};
+%             \addplot[domain=10:10000, samples=100, red, dashed] {x*ln(x)/100};
+%             \legend{Observed, $O(n \log n)$}
+%         \end{loglogaxis}
+%     \end{tikzpicture}
+%     \caption{Scalability analysis showing clearing time vs number of agents.}
+%     \label{fig:scalability}
+% \end{figure}
+
+% ============================================================
+% PARETO FRONT PLOT
+% ============================================================
+% For showing efficiency vs fairness trade-off
+
+% Example:
+% \begin{figure}[htbp]
+%     \centering
+%     \begin{tikzpicture}
+%         \begin{axis}[
+%             xlabel={Efficiency},
+%             ylabel={Fairness (Gini Index)},
+%             xmin=0.6, xmax=1.0,
+%             ymin=0.6, ymax=1.0,
+%         ]
+%             \addplot[only marks, mark=o] coordinates {
+%                 (0.78, 0.65) (0.82, 0.72) (0.89, 0.85) (0.94, 0.91)
+%             };
+%             \addplot[thick, shaktiblue, mark=*] coordinates {
+%                 (0.94, 0.91)
+%             };
+%             \node[anchor=west] at (axis cs:0.94,0.91) {SHAKTI};
+%         \end{axis}
+%     \end{tikzpicture}
+%     \caption{Pareto front showing efficiency-fairness trade-off.}
+%     \label{fig:pareto}
+% \end{figure}
+
+% ============================================================
+% VIOLIN PLOT APPROXIMATION
+% ============================================================
+% TikZ doesn't have native violin plots, use matplotlib export
+
+% ============================================================
+% FIGURE PLACEMENT HINTS
+% ============================================================
+% [h] - here (approximately)
+% [t] - top of page
+% [b] - bottom of page
+% [p] - separate page for floats
+% [!] - override internal parameters
+%
+% Recommended: [htbp] for flexibility
+
+% ============================================================
+% FIGURE SIZING GUIDELINES
+% ============================================================
+% Single column: \columnwidth (typically 3.5 inches)
+% Double column: \textwidth (typically 7 inches)
+% Specific sizes:
+%   - Quarter page: 0.45\columnwidth
+%   - Half page: 0.9\columnwidth
+%   - Full width: \textwidth
+
+% ============================================================
+% RESOLUTION REQUIREMENTS
+% ============================================================
+% IEEE requires:
+%   - Line art: 600 dpi minimum
+%   - Halftones: 300 dpi minimum
+%   - Color figures: 300 dpi minimum, CMYK color space
+%
+% Export settings:
+%   - PDF for vector graphics (preferred)
+%   - PNG at 300+ dpi for raster
+%   - Avoid JPEG for figures with text/lines
+
+% ============================================================
+% ACCESSIBILITY
+% ============================================================
+% Ensure figures are interpretable in grayscale
+% Use patterns in addition to colors
+% Provide detailed captions describing key findings

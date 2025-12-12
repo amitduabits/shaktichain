@@ -1,0 +1,31 @@
+# Random Bidding Baseline Configuration
+# Zero-intelligence market for comparison
+
+baseline:
+  name: "random_bidding"
+  description: "Market with all zero-intelligence agents for baseline comparison"
+
+mechanism:
+  type: "mcafee_double_auction"  # Same mechanism, different agents
+
+agent_composition:
+  zero_intelligence: 1.0  # 100% ZI agents
+
+zi_parameters:
+  variant: "ZI-C"  # Constrained to budget
+
+  price_distribution:
+    type: "uniform"
+    min_factor: 0.5  # 50% of fair price
+    max_factor: 1.5  # 150% of fair price
+
+  quantity_distribution:
+    type: "exponential"
+    mean_kwh: 5.0
+    max_kwh: 20.0
+
+purpose: |
+  This baseline establishes the welfare and efficiency achievable
+  by pure market structure without any agent intelligence.
+  Based on Gode & Sunder (1993) findings that market structure
+  alone can achieve high allocative efficiency.

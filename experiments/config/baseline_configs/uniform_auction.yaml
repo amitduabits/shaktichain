@@ -1,0 +1,32 @@
+# Uniform Price Auction Baseline Configuration
+# Single clearing price mechanism
+
+baseline:
+  name: "uniform_price_auction"
+  description: "Single clearing price auction where all trades execute at the same price"
+
+mechanism:
+  type: "uniform_price"
+
+  # Clearing price calculation
+  clearing_price_rule: "midpoint"  # "midpoint", "buyer_price", "seller_price"
+  # midpoint: (highest matched bid + lowest matched ask) / 2
+
+  # Tie-breaking
+  tie_breaking: "pro_rata"  # "pro_rata", "time_priority", "random"
+
+  # Clearing frequency
+  clearing_interval_seconds: 60
+
+  # Order types
+  allowed_order_types:
+    - "limit"
+
+  # No price improvement
+  price_improvement: false
+
+properties:
+  budget_balanced: true
+  individually_rational: true
+  incentive_compatible: false  # Uniform price not IC
+  allocatively_efficient: true  # Maximizes gains from trade

@@ -1,0 +1,56 @@
+# Bounded Rational Agent Configuration
+# Satisficing agent with limited computation (Herbert Simon)
+
+agent_type: "bounded_rational"
+description: "Agent with limited computational capacity using satisficing behavior"
+
+parameters:
+  # Satisficing parameters
+  aspiration_level:
+    description: "Minimum acceptable utility threshold"
+    distribution: "normal"
+    mean: 0.5
+    std: 0.1
+    min: 0.1
+    max: 0.9
+
+  # Limited search
+  max_alternatives_considered:
+    description: "Number of random bid alternatives to evaluate"
+    distribution: "poisson"
+    lambda: 10
+    min: 3
+    max: 50
+
+  # Aspiration adaptation
+  aspiration_adaptation:
+    enabled: true
+    increase_rate: 0.05  # On success
+    decrease_rate: 0.1   # On failure
+
+  # Memory limitations
+  market_memory_periods: 20
+
+  # Simplified price expectations
+  price_expectation:
+    method: "moving_average"
+    window: 10
+
+behavior:
+  # Stopping rule: First satisfactory option
+  search_strategy: "satisficing"
+
+  # Bid when aspiration can be met
+  bid_probability: 0.9
+
+  # Cognitive load effects
+  decision_noise:
+    enabled: true
+    std: 0.05
+
+  # Status quo bias
+  status_quo_bias: 0.2
+
+constraints:
+  computation_budget_ms: 100
+  max_iterations: 50
