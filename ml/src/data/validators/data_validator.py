@@ -54,7 +54,7 @@ class DataValidator:
     }
 
     # Expected frequency (should be hourly)
-    EXPECTED_FREQUENCY = "1H"
+    EXPECTED_FREQUENCY = "1h"
 
     def __init__(
         self,
@@ -106,22 +106,58 @@ class DataValidator:
                 result.errors.append(f"Cannot convert timestamp to datetime: {e}")
                 return result
 
-        # Check for duplicates
-        duplicates = df["timestamp"].duplicated().sum()
+        has_region = "region" in df.columns
+        duplicate_subset = ["timestamp", "region"] if has_region else ["timestamp"]
+
+        # Check for duplicates (timestamp+region for multi-region data)
+        duplicates = df.duplicated(subset=duplicate_subset).sum()
         if duplicates > 0:
             result.passed = False
             result.errors.append(f"Found {duplicates} duplicate timestamps")
 
         # Check chronological order
-        if not df["timestamp"].is_monotonic_increasing:
-            result.warnings.append("Timestamps are not in chronological order")
+        if has_region:
+            non_monotonic_regions = 0
+            for _, group in df.groupby("region"):
+                if not group.sort_values("timestamp")["timestamp"].is_monotonic_increasing:
+                    non_monotonic_regions += 1
+            if non_monotonic_regions > 0:
+                result.warnings.append(
+                    f"Timestamps are not in chronological order for {non_monotonic_regions} regions"
+                )
+        else:
+            if not df["timestamp"].is_monotonic_increasing:
+                result.warnings.append("Timestamps are not in chronological order")
 
         # Check frequency
-        df_sorted = df.sort_values("timestamp")
-        time_diffs = df_sorted["timestamp"].diff()
-
         expected_diff = pd.Timedelta(hours=1)
-        irregular = (time_diffs != expected_diff).sum() - 1  # -1 for first NaT
+        irregular = 0
+        missing_count = 0
+
+        if has_region:
+            for _, group in df.groupby("region"):
+                df_sorted = group.sort_values("timestamp")
+                unique_group = df_sorted.drop_duplicates(subset=["timestamp"])
+
+                time_diffs = unique_group["timestamp"].diff()
+                irregular += int((time_diffs.dropna() != expected_diff).sum())
+
+                date_range = pd.date_range(
+                    start=unique_group["timestamp"].min(),
+                    end=unique_group["timestamp"].max(),
+                    freq="h",
+                )
+                missing_count += max(0, len(date_range) - len(unique_group))
+        else:
+            df_sorted = df.sort_values("timestamp").drop_duplicates(subset=["timestamp"])
+            time_diffs = df_sorted["timestamp"].diff()
+            irregular = int((time_diffs.dropna() != expected_diff).sum())
+            date_range = pd.date_range(
+                start=df_sorted["timestamp"].min(),
+                end=df_sorted["timestamp"].max(),
+                freq="h",
+            )
+            missing_count = max(0, len(date_range) - len(df_sorted))
 
         if irregular > len(df) * 0.01:  # More than 1% irregular
             result.warnings.append(
@@ -136,14 +172,6 @@ class DataValidator:
             result.warnings.append(
                 f"Timezone is {df['timestamp'].dt.tz}, expected {self.timezone}"
             )
-
-        # Find missing timestamps
-        date_range = pd.date_range(
-            start=df["timestamp"].min(),
-            end=df["timestamp"].max(),
-            freq="H"
-        )
-        missing_count = len(date_range) - len(df)
 
         if missing_count > 0:
             result.warnings.append(f"Missing {missing_count} timestamps in range")
@@ -290,17 +318,25 @@ class DataValidator:
         result = ValidationResult(passed=True)
         anomalies = []
 
+        has_region = "region" in df.columns
+        grouped = (
+            [(region, grp.sort_values("timestamp")) for region, grp in df.groupby("region")]
+            if has_region
+            else [("all", df.sort_values("timestamp"))]
+        )
+
         # Check for consecutive identical values
         for column in ["load_mw", "temperature_c", "price_inr_mwh"]:
             if column not in df.columns:
                 continue
 
-            # Find sequences of identical values
-            consecutive = (df[column] == df[column].shift()).astype(int)
-            consecutive_sum = consecutive.rolling(window=6).sum()
-
-            # Flag if 6+ consecutive identical values
-            stuck_points = (consecutive_sum >= 5).sum()
+            stuck_points = 0
+            for _, grp in grouped:
+                if column not in grp.columns:
+                    continue
+                consecutive = (grp[column] == grp[column].shift()).astype(int)
+                consecutive_sum = consecutive.rolling(window=6).sum()
+                stuck_points += int((consecutive_sum >= 5).sum())
 
             if stuck_points > 0:
                 result.warnings.append(
@@ -317,11 +353,14 @@ class DataValidator:
             if column not in df.columns:
                 continue
 
-            # Calculate rate of change
-            change = df[column].diff().abs()
-            threshold = df[column].std() * 3
-
-            sudden_changes = (change > threshold).sum()
+            sudden_changes = 0
+            for _, grp in grouped:
+                if column not in grp.columns:
+                    continue
+                change = grp[column].diff().abs()
+                threshold = grp[column].std() * 3
+                if pd.notna(threshold) and threshold > 0:
+                    sudden_changes += int((change > threshold).sum())
 
             if sudden_changes > len(df) * 0.01:  # More than 1%
                 result.warnings.append(

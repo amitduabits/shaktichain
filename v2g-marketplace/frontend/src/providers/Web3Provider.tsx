@@ -39,6 +39,17 @@ export function useAppMode() {
   return context;
 }
 
+export function useOptionalAppMode(): ModeContextType {
+  const context = useContext(ModeContext);
+  return context ?? {
+    mode: 'simulation',
+    setMode: () => {},
+    isLiveMode: false,
+    isSimulationMode: true,
+    toggleMode: () => {},
+  };
+}
+
 // Transaction status context for global transaction tracking
 export type TransactionStatus = 'idle' | 'pending' | 'confirming' | 'confirmed' | 'failed';
 

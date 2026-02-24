@@ -5,8 +5,6 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
-import pytz
-from scipy import interpolate
 
 logger = logging.getLogger(__name__)
 
@@ -54,19 +52,11 @@ class AdvancedPreprocessor:
 
         logger.info(f"Normalizing timestamps to {self.timezone}")
 
-        # Convert to datetime if not already
-        if not pd.api.types.is_datetime64_any_dtype(df["timestamp"]):
-            df["timestamp"] = pd.to_datetime(df["timestamp"])
-
-        # Convert timezone
-        tz = pytz.timezone(self.timezone)
-
-        if df["timestamp"].dt.tz is None:
-            # Assume UTC if no timezone
-            df["timestamp"] = df["timestamp"].dt.tz_localize("UTC")
-
-        # Convert to target timezone
-        df["timestamp"] = df["timestamp"].dt.tz_convert(tz)
+        # Convert to timezone-aware datetime using UTC baseline.
+        ts = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
+        if ts.isna().any():
+            logger.warning("Found invalid timestamps during timezone normalization")
+        df["timestamp"] = ts.dt.tz_convert(self.timezone)
 
         logger.info(f"Timestamps normalized to {self.timezone}")
         return df
@@ -93,21 +83,39 @@ class AdvancedPreprocessor:
 
         logger.info("Resampling to hourly frequency")
 
-        # Set timestamp as index
-        df = df.set_index("timestamp")
+        def _resample_frame(frame: pd.DataFrame) -> pd.DataFrame:
+            frame = frame.sort_values("timestamp").set_index("timestamp")
 
-        # Resample
-        if agg_method == "mean":
-            df = df.resample("1H").mean()
-        elif agg_method == "median":
-            df = df.resample("1H").median()
-        elif agg_method == "sum":
-            df = df.resample("1H").sum()
+            numeric_cols = frame.select_dtypes(include=[np.number, "bool"]).columns.tolist()
+            numeric_frame = frame[numeric_cols] if numeric_cols else pd.DataFrame(index=frame.index)
+
+            if agg_method == "mean":
+                aggregated = numeric_frame.resample("1h").mean(numeric_only=True)
+            elif agg_method == "median":
+                aggregated = numeric_frame.resample("1h").median(numeric_only=True)
+            elif agg_method == "sum":
+                aggregated = numeric_frame.resample("1h").sum(numeric_only=True)
+            else:
+                raise ValueError(f"Unknown aggregation method: {agg_method}")
+
+            non_numeric_cols = [c for c in frame.columns if c not in numeric_cols]
+            if non_numeric_cols:
+                non_numeric = frame[non_numeric_cols].resample("1h").first()
+                aggregated = aggregated.join(non_numeric, how="left")
+
+            return aggregated.reset_index()
+
+        if "region" in df.columns:
+            pieces = []
+            for region, group in df.groupby("region", sort=False):
+                piece = _resample_frame(group)
+                if "region" not in piece.columns:
+                    piece["region"] = region
+                pieces.append(piece)
+            df = pd.concat(pieces, ignore_index=True)
+            df = df.sort_values(["timestamp", "region"]).reset_index(drop=True)
         else:
-            raise ValueError(f"Unknown aggregation method: {agg_method}")
-
-        # Reset index
-        df = df.reset_index()
+            df = _resample_frame(df)
 
         logger.info(f"Resampled to {len(df)} hourly records")
         return df
@@ -139,6 +147,7 @@ class AdvancedPreprocessor:
         # Ensure sorted by timestamp
         if "timestamp" in df.columns:
             df = df.sort_values("timestamp")
+            df["timestamp"] = pd.to_datetime(df["timestamp"])
 
         for column in columns:
             if column not in df.columns:
@@ -159,21 +168,23 @@ class AdvancedPreprocessor:
 
             # Interpolate small gaps
             small_gaps = gap_sizes[gap_sizes <= self.interpolation_max_gap].index
+            if "timestamp" in df.columns:
+                ts_index = pd.DatetimeIndex(df["timestamp"])
+                interpolated = (
+                    pd.Series(df[column].values, index=ts_index)
+                    .interpolate(method="time", limit=self.interpolation_max_gap)
+                    .values
+                )
+            else:
+                interpolated = (
+                    pd.Series(df[column].values)
+                    .interpolate(method="linear", limit=self.interpolation_max_gap)
+                    .values
+                )
 
             for gap_id in small_gaps:
                 gap_mask = (df["_gap_id"] == gap_id) & missing_mask
-
-                # Time-based interpolation
-                if "timestamp" in df.columns:
-                    df.loc[gap_mask, column] = df[column].interpolate(
-                        method="time",
-                        limit=self.interpolation_max_gap
-                    )[gap_mask]
-                else:
-                    df.loc[gap_mask, column] = df[column].interpolate(
-                        method="linear",
-                        limit=self.interpolation_max_gap
-                    )[gap_mask]
+                df.loc[gap_mask, column] = interpolated[gap_mask.to_numpy()]
 
             # Flag large gaps
             large_gaps = gap_sizes[gap_sizes > self.interpolation_max_gap].index
@@ -193,8 +204,8 @@ class AdvancedPreprocessor:
                     df.loc[gap_mask, flag_col] = True
 
                     # Fill with forward fill then backward fill
-                    df[column] = df[column].fillna(method="ffill", limit=24)
-                    df[column] = df[column].fillna(method="bfill", limit=24)
+                    df[column] = df[column].ffill(limit=24)
+                    df[column] = df[column].bfill(limit=24)
 
             # Clean up
             df = df.drop(columns=["_gap_id"], errors="ignore")

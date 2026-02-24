@@ -633,7 +633,7 @@ async def _generate_anomaly_explanation(
     if primary_type == AnomalyType.WASH_TRADING:
         explanation += "Pattern consistent with wash trading (trades between related parties)."
     elif primary_type == AnomalyType.PRICE_MANIPULATION:
-        explanation += f"Price of ₹{entity_data.get('price', 0):.2f} is significantly above normal range."
+        explanation += f"Price of INR {entity_data.get('price', 0):.2f} is significantly above normal range."
     elif primary_type == AnomalyType.VOLUME_SPIKE:
         explanation += f"Volume of {entity_data.get('quantity', 0):.1f} units is unusually high."
     elif primary_type == AnomalyType.ENERGY_DISCREPANCY:
@@ -762,3 +762,4 @@ async def _compute_coordination_score(
         total_weight += members
 
     return weighted_score / (total_weight + 1e-8)
+

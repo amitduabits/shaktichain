@@ -1,0 +1,588 @@
+name: shakti-chain
+
+x-backend-env: &backend-env
+  PYTHONUNBUFFERED: "1"
+  PYTHONPATH: /workspace/v2g-marketplace:/workspace/v2g-marketplace/backend
+  V2G_DB_PATH: /workspace/v2g-marketplace/data/v2g.db
+  DATABASE_URL: sqlite:////workspace/v2g-marketplace/data/v2g.db
+  JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
+
+x-ml-env: &ml-env
+  ML_SERVICE_HOST: 0.0.0.0
+  ML_SERVICE_PORT: 8000
+  ML_SERVICE_WORKERS: ${ML_SERVICE_WORKERS:-2}
+  ML_SERVICE_DEBUG: "false"
+  ML_SERVICE_REDIS_URL: redis://redis:6379/0
+
+services:
+  backend-dev:
+    profiles: ["dev"]
+    build:
+      context: ./v2g-marketplace
+      dockerfile: backend/Dockerfile.dev
+    environment:
+      <<: *backend-env
+      ENVIRONMENT: development
+    working_dir: /workspace/v2g-marketplace
+    command: >
+      uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
+      --reload-dir /workspace/v2g-marketplace/backend
+      --reload-dir /workspace/v2g-marketplace/simulation
+    volumes:
+      - ./v2g-marketplace/backend:/workspace/v2g-marketplace/backend
+      - ./v2g-marketplace/simulation:/workspace/v2g-marketplace/simulation
+      - ./v2g-marketplace/data:/workspace/v2g-marketplace/data
+      - ./artifacts:/workspace/artifacts
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      shakti-net:
+        aliases: [backend]
+
+  backend:
+    profiles: ["prod"]
+    build:
+      context: ./v2g-marketplace
+      dockerfile: backend/Dockerfile.prod
+    environment:
+      PYTHONUNBUFFERED: "1"
+      V2G_DB_PATH: /app/data/v2g.db
+      DATABASE_URL: sqlite:////app/data/v2g.db
+      JWT_SECRET: ${JWT_SECRET:-replace-in-production}
+      BACKEND_WORKERS: ${BACKEND_WORKERS:-4}
+    volumes:
+      - backend-data:/app/data
+      - backend-logs:/app/logs
+      - ./artifacts:/app/artifacts
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    networks:
+      shakti-net:
+        aliases: [backend]
+
+  backend-test-api:
+    profiles: ["test"]
+    build:
+      context: ./v2g-marketplace
+      dockerfile: backend/Dockerfile.prod
+    environment:
+      PYTHONUNBUFFERED: "1"
+      V2G_DB_PATH: /tmp/v2g-test-api.db
+      DATABASE_URL: sqlite:////tmp/v2g-test-api.db
+      JWT_SECRET: ${JWT_SECRET:-test-secret}
+      BACKEND_WORKERS: "1"
+    command: ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      shakti-net:
+        aliases: [backend]
+
+  frontend-dev:
+    profiles: ["dev"]
+    build:
+      context: ./v2g-marketplace/frontend
+      dockerfile: Dockerfile.dev
+    environment:
+      NODE_ENV: development
+      VITE_API_URL: http://localhost:${BACKEND_PORT:-8000}
+    volumes:
+      - ./v2g-marketplace/frontend:/app
+      - frontend-node-modules:/app/node_modules
+    ports:
+      - "${FRONTEND_DEV_PORT:-5173}:5173"
+    depends_on:
+      backend-dev:
+        condition: service_healthy
+    networks:
+      - shakti-net
+
+  frontend:
+    profiles: ["prod"]
+    build:
+      context: ./v2g-marketplace/frontend
+      dockerfile: Dockerfile.prod
+      args:
+        VITE_API_URL: ${VITE_API_URL:-/api}
+        VITE_WALLET_CONNECT_PROJECT_ID: ${VITE_WALLET_CONNECT_PROJECT_ID:-}
+        VITE_POLYGON_RPC_URL: ${VITE_POLYGON_RPC_URL:-https://polygon-rpc.com}
+        VITE_POLYGON_AMOY_RPC_URL: ${VITE_POLYGON_AMOY_RPC_URL:-https://rpc-amoy.polygon.technology}
+        VITE_USE_TESTNET: ${VITE_USE_TESTNET:-false}
+    expose:
+      - "80"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      shakti-net:
+        aliases: [frontend]
+
+  ml-service-dev:
+    profiles: ["dev"]
+    build:
+      context: ./ml/ml-service
+      dockerfile: Dockerfile.dev
+    environment:
+      <<: *ml-env
+      ML_SERVICE_DEBUG: "true"
+      PYTHONPATH: /app:/workspace/ml
+    volumes:
+      - ./ml/ml-service:/app
+      - ./ml/src:/workspace/ml/src
+      - ./artifacts:/workspace/artifacts
+    ports:
+      - "${ML_SERVICE_PORT:-8010}:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      shakti-net:
+        aliases: [ml-service]
+
+  ml-service:
+    profiles: ["prod"]
+    build:
+      context: ./ml/ml-service
+      dockerfile: Dockerfile.prod
+    environment:
+      <<: *ml-env
+      ML_SERVICE_DEBUG: "false"
+      PYTHONPATH: /app:/workspace/ml
+    expose:
+      - "8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      shakti-net:
+        aliases: [ml-service]
+
+  ml-service-gpu:
+    profiles: ["gpu"]
+    build:
+      context: ./ml/ml-service
+      dockerfile: Dockerfile.prod
+    environment:
+      <<: *ml-env
+      PYTHONPATH: /app:/workspace/ml
+    networks:
+      - shakti-net
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  experiments-runner-dev:
+    profiles: ["dev"]
+    build:
+      context: ./experiments
+      dockerfile: Dockerfile.dev
+    environment:
+      PYTHONUNBUFFERED: "1"
+      PYTHONPATH: /workspace
+    command: ["python", "scripts/run_claims.py", "--mode", "dev", "--output", "/workspace/artifacts/claim_matrix"]
+    volumes:
+      - ./experiments:/workspace/experiments
+      - ./artifacts:/workspace/artifacts
+      - ./.git:/workspace/.git:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    working_dir: /workspace/experiments
+    networks:
+      - shakti-net
+
+  experiments-runner:
+    profiles: ["prod"]
+    build:
+      context: ./experiments
+      dockerfile: Dockerfile.prod
+    environment:
+      PYTHONUNBUFFERED: "1"
+      PYTHONPATH: /workspace
+    command: ["python", "scripts/run_claims.py", "--mode", "prod", "--output", "/workspace/artifacts/claim_matrix"]
+    volumes:
+      - ./artifacts:/workspace/artifacts
+      - ./.git:/workspace/.git:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - shakti-net
+
+  hardhat-node:
+    profiles: ["dev", "prod", "test"]
+    build:
+      context: ./shakti-contracts
+      dockerfile: Dockerfile.dev
+    command: ["npx", "hardhat", "node", "--hostname", "0.0.0.0", "--port", "8545"]
+    ports:
+      - "8545:8545"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "const net=require('net');const s=net.createConnection(8545,'127.0.0.1',()=>{s.end();process.exit(0)});s.on('error',()=>process.exit(1));",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - shakti-net
+
+  contracts-jobs:
+    profiles: ["prod"]
+    build:
+      context: ./shakti-contracts
+      dockerfile: Dockerfile.prod
+    command: ["sh", "-lc", "npm run compile"]
+    volumes:
+      - ./artifacts:/workspace/artifacts
+    networks:
+      - shakti-net
+
+  amoy-validation:
+    profiles: ["amoy"]
+    build:
+      context: ./shakti-contracts
+      dockerfile: Dockerfile.prod
+    working_dir: /workspace/shakti-contracts
+    environment:
+      POLYGON_AMOY_RPC_URL: ${POLYGON_AMOY_RPC_URL:-}
+      PRIVATE_KEY: ${PRIVATE_KEY:-}
+      ETHERSCAN_API_KEY: ${ETHERSCAN_API_KEY:-}
+      POLYGONSCAN_API_KEY: ${POLYGONSCAN_API_KEY:-}
+      ALCHEMY_API_KEY: ${ALCHEMY_API_KEY:-}
+      INFURA_API_KEY: ${INFURA_API_KEY:-}
+    command:
+      - sh
+      - -lc
+      - >-
+        sh /workspace/scripts/container/validate_amoy_secrets.sh &&
+        npm run compile &&
+        npx hardhat run scripts/utils/check-balance.ts --network amoy
+    volumes:
+      - ./scripts:/workspace/scripts:ro
+      - ./artifacts:/workspace/artifacts
+    networks:
+      - shakti-net
+
+  postgres:
+    profiles: ["dev", "prod", "test"]
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: graph
+      POSTGRES_PASSWORD: graph
+      POSTGRES_DB: graph-node
+      POSTGRES_INITDB_ARGS: --locale=C --encoding=UTF8
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U graph -d graph-node"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - shakti-net
+
+  ipfs:
+    profiles: ["dev", "prod", "test"]
+    image: ipfs/kubo:v0.28.0
+    ports:
+      - "5001:5001"
+    volumes:
+      - ipfs-data:/data/ipfs
+    networks:
+      - shakti-net
+
+  graph-node:
+    profiles: ["dev", "prod", "test"]
+    image: graphprotocol/graph-node:v0.35.1
+    environment:
+      postgres_host: postgres
+      postgres_user: graph
+      postgres_pass: graph
+      postgres_db: graph-node
+      ipfs: ipfs:5001
+      ethereum: ${GRAPH_ETHEREUM:-hardhat:http://hardhat-node:8545}
+      GRAPH_LOG: info
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ipfs:
+        condition: service_started
+      hardhat-node:
+        condition: service_healthy
+    ports:
+      - "${GRAPH_NODE_QUERY_PORT:-8001}:8000"
+      - "8002:8001"
+      - "8020:8020"
+      - "8030:8030"
+      - "8040:8040"
+    networks:
+      - shakti-net
+
+  subgraph-jobs:
+    profiles: ["dev", "prod"]
+    build:
+      context: ./subgraph
+      dockerfile: Dockerfile.prod
+    command: ["sh", "-lc", "npm run codegen && npm run build"]
+    depends_on:
+      graph-node:
+        condition: service_started
+    volumes:
+      - ./artifacts:/workspace/artifacts
+    networks:
+      - shakti-net
+
+  redis:
+    profiles: ["dev", "prod", "test"]
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - shakti-net
+
+  prometheus:
+    profiles: ["dev", "prod"]
+    image: prom/prometheus:v2.52.0
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    networks:
+      - shakti-net
+
+  grafana:
+    profiles: ["dev", "prod"]
+    image: grafana/grafana:10.4.3
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - shakti-net
+
+  gateway:
+    profiles: ["prod"]
+    image: nginx:1.27-alpine
+    ports:
+      - "${GATEWAY_HTTP_PORT:-80}:80"
+    volumes:
+      - ./docker/gateway/nginx.prod.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+      ml-service:
+        condition: service_started
+    networks:
+      - shakti-net
+
+  backend-tests:
+    profiles: ["test"]
+    build:
+      context: ./v2g-marketplace
+      dockerfile: backend/Dockerfile.prod
+    command: ["python", "-m", "pytest", "-q", "backend/tests"]
+    environment:
+      PYTHONUNBUFFERED: "1"
+      V2G_DB_PATH: /tmp/v2g-test.db
+      DATABASE_URL: sqlite:////tmp/v2g-test.db
+      JWT_SECRET: test-secret
+    networks:
+      - shakti-net
+
+  frontend-tests:
+    profiles: ["test"]
+    build:
+      context: ./v2g-marketplace/frontend
+      dockerfile: Dockerfile.dev
+    command: ["sh", "-lc", "npm run lint && npm run test -- --run"]
+    environment:
+      CI: "true"
+      VITE_API_URL: http://backend-test-api:8000
+    networks:
+      - shakti-net
+
+  frontend-e2e:
+    profiles: ["test"]
+    image: mcr.microsoft.com/playwright:v1.56.1-noble
+    working_dir: /work/frontend
+    environment:
+      CI: "true"
+      VITE_API_URL: http://backend-test-api:8000
+    volumes:
+      - ./v2g-marketplace/frontend:/work/frontend
+      - frontend-e2e-node-modules:/work/frontend/node_modules
+    command: ["bash", "-lc", "npm ci && npx playwright install --with-deps chromium && npm run test:e2e -- --project=chromium"]
+    depends_on:
+      backend-test-api:
+        condition: service_healthy
+    networks:
+      - shakti-net
+
+  contracts-tests:
+    profiles: ["test"]
+    build:
+      context: ./shakti-contracts
+      dockerfile: Dockerfile.prod
+    command: ["sh", "-lc", "npm run compile && npm test"]
+    depends_on:
+      hardhat-node:
+        condition: service_healthy
+    networks:
+      - shakti-net
+
+  subgraph-tests:
+    profiles: ["test"]
+    build:
+      context: ./subgraph
+      dockerfile: Dockerfile.prod
+    command: ["sh", "-lc", "npm run codegen && npm run build && npx graph test -v 0.5.4"]
+    depends_on:
+      graph-node:
+        condition: service_started
+    networks:
+      - shakti-net
+
+  ml-tests:
+    profiles: ["test"]
+    build:
+      context: .
+      dockerfile: ml/Dockerfile.test
+    working_dir: /workspace
+    command: ["pytest", "-q", "ml/tests"]
+    volumes:
+      - ./:/workspace
+    networks:
+      - shakti-net
+
+  experiments-tests:
+    profiles: ["test"]
+    image: python:3.11-slim
+    working_dir: /workspace
+    command: ["sh", "-lc", "pip install --no-cache-dir -r experiments/requirements.txt pytest && pytest -q experiments/tests && PYTHONPATH=/workspace python experiments/scripts/run_claims.py --mode test --output /workspace/artifacts/claim_matrix"]
+    volumes:
+      - ./:/workspace
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - shakti-net
+
+  integration-e2e:
+    profiles: ["test"]
+    build:
+      context: ./v2g-marketplace
+      dockerfile: backend/Dockerfile.prod
+    command: ["python", "/app/scripts/integration_e2e.py"]
+    environment:
+      BACKEND_URL: http://backend-test-api:8000
+      GRAPH_QUERY_URL: http://graph-node:8000/subgraphs/name/shakti-chain/shakti-chain
+      HARDHAT_URL: http://hardhat-node:8545
+    depends_on:
+      backend-test-api:
+        condition: service_healthy
+      graph-node:
+        condition: service_started
+      hardhat-node:
+        condition: service_healthy
+    networks:
+      - shakti-net
+
+  hardcode-scan:
+    profiles: ["test"]
+    image: python:3.11-slim
+    working_dir: /workspace
+    command: ["python", "scripts/verify/no_hardcode.py"]
+    volumes:
+      - ./:/workspace
+    networks:
+      - shakti-net
+
+  all-tests-pass:
+    profiles: ["test"]
+    image: alpine:3.20
+    command: ["sh", "-lc", "echo 'All containerized test jobs passed.'"]
+    depends_on:
+      backend-tests:
+        condition: service_completed_successfully
+      frontend-tests:
+        condition: service_completed_successfully
+      frontend-e2e:
+        condition: service_completed_successfully
+      contracts-tests:
+        condition: service_completed_successfully
+      subgraph-tests:
+        condition: service_completed_successfully
+      ml-tests:
+        condition: service_completed_successfully
+      experiments-tests:
+        condition: service_completed_successfully
+      integration-e2e:
+        condition: service_completed_successfully
+      hardcode-scan:
+        condition: service_completed_successfully
+    networks:
+      - shakti-net
+
+volumes:
+  backend-data:
+  backend-logs:
+  frontend-node-modules:
+  frontend-e2e-node-modules:
+  redis-data:
+  postgres-data:
+  ipfs-data:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  shakti-net:
+    driver: bridge

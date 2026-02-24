@@ -46,6 +46,16 @@ contract EnergyAuction is ReentrancyGuard, AccessControl, Pausable {
     error NoActiveAuction();
     error MaxOrdersReached(uint256 max);
     error ClearingNotComplete();
+    error RoundNotFound(uint256 roundId);
+    error InvalidCommitment();
+    error RevealWindowInvalid(uint256 provided, uint256 max);
+    error RevealWindowOpen(uint256 roundId, uint256 deadline, uint256 currentTime);
+    error RevealWindowClosed(uint256 roundId, uint256 deadline, uint256 currentTime);
+    error CommitmentNotFound(uint256 commitmentId);
+    error AlreadyRevealed(uint256 commitmentId);
+    error InvalidRevealData();
+    error InvalidSettlementMatch(uint256 bidOrderId, uint256 askOrderId);
+    error BatchSizeExceeded(uint256 provided, uint256 max);
 
     // ============ Constants ============
     bytes32 public constant AUCTIONEER_ROLE = keccak256("AUCTIONEER_ROLE");
@@ -67,6 +77,9 @@ contract EnergyAuction is ReentrancyGuard, AccessControl, Pausable {
 
     /// @notice Maximum orders to process per clearMarket call
     uint256 public constant BATCH_SIZE = 50;
+
+    /// @notice Maximum reveal window duration
+    uint256 public constant MAX_REVEAL_WINDOW = 24 hours;
 
     // ============ Enums ============
     enum AuctionState {
@@ -119,6 +132,22 @@ contract EnergyAuction is ReentrancyGuard, AccessControl, Pausable {
         bool isBid;
     }
 
+    /// @notice Committed order hash metadata for commit/reveal flow
+    struct Commitment {
+        address trader;
+        bytes32 commitment;
+        uint64 committedAt;
+        uint64 revealDeadline;
+        bool revealed;
+    }
+
+    /// @notice Operator-provided settlement pair for batch settlement
+    struct SettlementMatch {
+        uint256 bidOrderId;
+        uint256 askOrderId;
+        uint128 quantity;
+    }
+
     // ============ State Variables ============
     /// @notice SHAKTI token for payments
     IERC20 public immutable shaktiToken;
@@ -156,6 +185,21 @@ contract EnergyAuction is ReentrancyGuard, AccessControl, Pausable {
 
     /// @notice Clearing progress tracking
     mapping(uint256 => uint256) public clearingIndex;
+
+    /// @notice Mapping of round ID to commitment ID to commitment metadata
+    mapping(uint256 => mapping(uint256 => Commitment)) public commitments;
+
+    /// @notice Mapping of round ID to next commitment ID
+    mapping(uint256 => uint256) public nextCommitmentId;
+
+    /// @notice Outstanding (unrevealed) commitments per round
+    mapping(uint256 => uint256) public outstandingCommitments;
+
+    /// @notice Maximum reveal deadline configured for each round
+    mapping(uint256 => uint64) public roundRevealDeadline;
+
+    /// @notice Mapping of round and commitment ID to resulting revealed order ID
+    mapping(uint256 => mapping(uint256 => uint256)) public commitmentOrderId;
 
     // ============ Events ============
     event AuctionRoundCreated(
@@ -201,6 +245,28 @@ contract EnergyAuction is ReentrancyGuard, AccessControl, Pausable {
     event DepositRefunded(address indexed trader, uint256 amount);
     event BatchBidsSubmitted(uint256 indexed roundId, address indexed trader, uint256 count);
     event BatchAsksSubmitted(uint256 indexed roundId, address indexed trader, uint256 count);
+    event OrderCommitted(
+        uint256 indexed roundId,
+        uint256 indexed commitmentId,
+        address indexed trader,
+        bytes32 commitment,
+        uint256 revealDeadline
+    );
+    event OrderRevealed(
+        uint256 indexed roundId,
+        uint256 indexed commitmentId,
+        uint256 indexed orderId,
+        address trader,
+        uint256 quantity,
+        uint256 price,
+        bool isBid
+    );
+    event BatchSettled(
+        uint256 indexed roundId,
+        uint128 settlementPrice,
+        uint256 matchedPairs,
+        uint256 totalVolume
+    );
 
     // ============ Constructor ============
     /**
@@ -274,6 +340,117 @@ contract EnergyAuction is ReentrancyGuard, AccessControl, Pausable {
         });
 
         emit AuctionRoundCreated(roundId, block.timestamp, block.timestamp + duration, duration);
+    }
+
+    /**
+     * @notice Deterministically computes commitment hash for commit/reveal flow
+     * @param roundId Auction round ID
+     * @param trader Trader address
+     * @param quantity Quantity in Wh
+     * @param pricePerWh Price per Wh
+     * @param isBid True for bid, false for ask
+     * @param nonce User-generated random nonce
+     */
+    function computeCommitment(
+        uint256 roundId,
+        address trader,
+        uint256 quantity,
+        uint256 pricePerWh,
+        bool isBid,
+        bytes32 nonce
+    ) public pure returns (bytes32) {
+        return keccak256(abi.encode(roundId, trader, quantity, pricePerWh, isBid, nonce));
+    }
+
+    /**
+     * @notice Commits sealed order hash before round closes
+     * @param roundId Auction round ID
+     * @param commitmentHash Keccak commitment of reveal payload
+     * @param revealWindowSeconds Reveal deadline extension after round end
+     */
+    function commitOrder(
+        uint256 roundId,
+        bytes32 commitmentHash,
+        uint256 revealWindowSeconds
+    ) external whenNotPaused returns (uint256 commitmentId) {
+        AuctionRound storage round = auctionRounds[roundId];
+        if (round.roundId == 0) revert RoundNotFound(roundId);
+        if (round.state != AuctionState.OPEN) revert AuctionNotOpen(roundId, round.state);
+        if (block.timestamp >= round.endTime) revert AuctionAlreadyEnded(roundId);
+        if (commitmentHash == bytes32(0)) revert InvalidCommitment();
+        if (revealWindowSeconds == 0 || revealWindowSeconds > MAX_REVEAL_WINDOW) {
+            revert RevealWindowInvalid(revealWindowSeconds, MAX_REVEAL_WINDOW);
+        }
+        if (round.totalBids + round.totalAsks + outstandingCommitments[roundId] >= MAX_ORDERS_PER_ROUND) {
+            revert MaxOrdersReached(MAX_ORDERS_PER_ROUND);
+        }
+
+        uint64 revealDeadline = uint64(uint256(round.endTime) + revealWindowSeconds);
+        commitmentId = nextCommitmentId[roundId]++;
+        commitments[roundId][commitmentId] = Commitment({
+            trader: msg.sender,
+            commitment: commitmentHash,
+            committedAt: uint64(block.timestamp),
+            revealDeadline: revealDeadline,
+            revealed: false
+        });
+        unchecked {
+            outstandingCommitments[roundId] += 1;
+        }
+        if (revealDeadline > roundRevealDeadline[roundId]) {
+            roundRevealDeadline[roundId] = revealDeadline;
+        }
+
+        emit OrderCommitted(roundId, commitmentId, msg.sender, commitmentHash, revealDeadline);
+    }
+
+    /**
+     * @notice Reveals committed order and creates active orderbook entry
+     * @param roundId Auction round ID
+     * @param commitmentId Commitment ID created in commit phase
+     * @param quantity Quantity in Wh
+     * @param pricePerWh Price per Wh
+     * @param isBid True for bid, false for ask
+     * @param nonce Reveal nonce used to derive commitment hash
+     */
+    function revealOrder(
+        uint256 roundId,
+        uint256 commitmentId,
+        uint256 quantity,
+        uint256 pricePerWh,
+        bool isBid,
+        bytes32 nonce
+    ) external nonReentrant whenNotPaused returns (uint256 orderId) {
+        AuctionRound storage round = auctionRounds[roundId];
+        if (round.roundId == 0) revert RoundNotFound(roundId);
+        if (round.state == AuctionState.CLEARING || round.state == AuctionState.SETTLED) {
+            revert AuctionNotClosed(roundId, round.state);
+        }
+        if (block.timestamp < round.endTime) {
+            revert AuctionNotEnded(roundId, round.endTime, block.timestamp);
+        }
+
+        Commitment storage record = commitments[roundId][commitmentId];
+        if (record.trader == address(0)) revert CommitmentNotFound(commitmentId);
+        if (record.trader != msg.sender) revert NotOrderOwner(msg.sender, record.trader);
+        if (record.revealed) revert AlreadyRevealed(commitmentId);
+        if (block.timestamp > record.revealDeadline) {
+            revert RevealWindowClosed(roundId, record.revealDeadline, block.timestamp);
+        }
+
+        _validateOrder(quantity, pricePerWh);
+        bytes32 expected = computeCommitment(roundId, msg.sender, quantity, pricePerWh, isBid, nonce);
+        if (expected != record.commitment) revert InvalidRevealData();
+
+        record.revealed = true;
+        unchecked {
+            outstandingCommitments[roundId] -= 1;
+        }
+
+        orderId = _createOrder(roundId, msg.sender, quantity, pricePerWh, isBid);
+        commitmentOrderId[roundId][commitmentId] = orderId;
+
+        emit OrderRevealed(roundId, commitmentId, orderId, msg.sender, quantity, pricePerWh, isBid);
     }
 
     // ============ Batch Order Structs ============
@@ -585,6 +762,11 @@ contract EnergyAuction is ReentrancyGuard, AccessControl, Pausable {
     function clearMarket(uint256 roundId) external onlyRole(OPERATOR_ROLE) nonReentrant {
         AuctionRound storage round = auctionRounds[roundId];
 
+        uint64 revealDeadline = roundRevealDeadline[roundId];
+        if (revealDeadline != 0 && outstandingCommitments[roundId] > 0 && block.timestamp < revealDeadline) {
+            revert RevealWindowOpen(roundId, revealDeadline, block.timestamp);
+        }
+
         if (round.state == AuctionState.CLOSED) {
             round.state = AuctionState.CLEARING;
         }
@@ -679,6 +861,104 @@ contract EnergyAuction is ReentrancyGuard, AccessControl, Pausable {
             _markUnmatchedOrdersExpired(roundId);
             _finalizeClearing(roundId);
         }
+    }
+
+    /**
+     * @notice Applies off-chain computed settlement pairs in a single operator batch
+     * @param roundId Auction round ID
+     * @param settlementPrice Uniform settlement price per Wh
+     * @param matches Bid/ask pairings with matched quantity
+     */
+    function settleBatch(
+        uint256 roundId,
+        uint128 settlementPrice,
+        SettlementMatch[] calldata matches
+    ) external onlyRole(OPERATOR_ROLE) nonReentrant {
+        AuctionRound storage round = auctionRounds[roundId];
+        if (round.roundId == 0) revert RoundNotFound(roundId);
+        if (settlementPrice < minPrice || settlementPrice > maxPrice) {
+            revert InvalidPrice(settlementPrice, minPrice, maxPrice);
+        }
+        if (matches.length > BATCH_SIZE) {
+            revert BatchSizeExceeded(matches.length, BATCH_SIZE);
+        }
+
+        uint64 revealDeadline = roundRevealDeadline[roundId];
+        if (revealDeadline != 0 && outstandingCommitments[roundId] > 0 && block.timestamp < revealDeadline) {
+            revert RevealWindowOpen(roundId, revealDeadline, block.timestamp);
+        }
+
+        if (round.state == AuctionState.OPEN) {
+            if (block.timestamp < round.endTime) {
+                revert AuctionNotEnded(roundId, round.endTime, block.timestamp);
+            }
+            round.state = AuctionState.CLOSED;
+            emit AuctionRoundClosed(roundId, round.totalBids, round.totalAsks);
+        }
+        if (round.state == AuctionState.CLOSED) {
+            round.state = AuctionState.CLEARING;
+        }
+        if (round.state != AuctionState.CLEARING) {
+            revert AuctionNotClosed(roundId, round.state);
+        }
+
+        round.clearingPrice = settlementPrice;
+        uint256 settledVolume;
+
+        for (uint256 i = 0; i < matches.length; i++) {
+            SettlementMatch calldata pair = matches[i];
+            if (pair.quantity == 0) revert ZeroAmount();
+
+            Order storage bid = orders[roundId][pair.bidOrderId];
+            Order storage ask = orders[roundId][pair.askOrderId];
+            if (
+                bid.trader == address(0) ||
+                ask.trader == address(0) ||
+                !bid.isBid ||
+                ask.isBid ||
+                bid.status != OrderStatus.ACTIVE ||
+                ask.status != OrderStatus.ACTIVE ||
+                bid.price < settlementPrice ||
+                ask.price > settlementPrice ||
+                pair.quantity > bid.quantity ||
+                pair.quantity > ask.quantity
+            ) {
+                revert InvalidSettlementMatch(pair.bidOrderId, pair.askOrderId);
+            }
+
+            bid.status = OrderStatus.MATCHED;
+            bid.matchedQuantity = pair.quantity;
+            bid.matchedPrice = settlementPrice;
+
+            ask.status = OrderStatus.MATCHED;
+            ask.matchedQuantity = pair.quantity;
+            ask.matchedPrice = settlementPrice;
+
+            unchecked {
+                round.matchedOrders += 2;
+                round.totalVolume += pair.quantity;
+                settledVolume += pair.quantity;
+            }
+
+            uint256 payment = (uint256(pair.quantity) * uint256(settlementPrice)) / PRICE_PRECISION;
+            lockedDeposits[bid.trader][roundId] -= payment;
+            shaktiToken.safeTransfer(ask.trader, payment);
+
+            uint256 originalDeposit = (uint256(bid.quantity) * uint256(bid.price)) / PRICE_PRECISION;
+            uint256 refund = originalDeposit - payment;
+            if (refund > 0) {
+                lockedDeposits[bid.trader][roundId] -= refund;
+                shaktiToken.safeTransfer(bid.trader, refund);
+            }
+
+            emit OrderMatched(roundId, bid.orderId, bid.trader, pair.quantity, settlementPrice, true);
+            emit OrderMatched(roundId, ask.orderId, ask.trader, pair.quantity, settlementPrice, false);
+        }
+
+        _markUnmatchedOrdersExpired(roundId);
+        _finalizeClearing(roundId);
+
+        emit BatchSettled(roundId, settlementPrice, matches.length, settledVolume);
     }
 
     /**
@@ -861,6 +1141,57 @@ contract EnergyAuction is ReentrancyGuard, AccessControl, Pausable {
         }
         if (price < minPrice || price > maxPrice) {
             revert InvalidPrice(price, minPrice, maxPrice);
+        }
+    }
+
+    /**
+     * @dev Creates an order and inserts into sorted orderbook
+     */
+    function _createOrder(
+        uint256 roundId,
+        address trader,
+        uint256 quantity,
+        uint256 pricePerWh,
+        bool isBid
+    ) internal returns (uint256 orderId) {
+        AuctionRound storage round = auctionRounds[roundId];
+        if (round.totalBids + round.totalAsks >= MAX_ORDERS_PER_ROUND) {
+            revert MaxOrdersReached(MAX_ORDERS_PER_ROUND);
+        }
+
+        if (isBid) {
+            uint256 requiredDeposit = (quantity * pricePerWh) / PRICE_PRECISION;
+            shaktiToken.safeTransferFrom(trader, address(this), requiredDeposit);
+            lockedDeposits[trader][roundId] += requiredDeposit;
+        }
+
+        orderId = nextOrderId[roundId]++;
+        orders[roundId][orderId] = Order({
+            orderId: orderId,
+            trader: trader,
+            quantity: uint128(quantity),
+            price: uint128(pricePerWh),
+            isBid: isBid,
+            timestamp: uint64(block.timestamp),
+            status: OrderStatus.ACTIVE,
+            matchedQuantity: 0,
+            matchedPrice: 0
+        });
+
+        traderOrders[trader][roundId].push(orderId);
+
+        if (isBid) {
+            _insertBidSorted(roundId, orderId, pricePerWh);
+            unchecked {
+                round.totalBids += 1;
+            }
+            emit BidSubmitted(roundId, orderId, trader, quantity, pricePerWh);
+        } else {
+            _insertAskSorted(roundId, orderId, pricePerWh);
+            unchecked {
+                round.totalAsks += 1;
+            }
+            emit AskSubmitted(roundId, orderId, trader, quantity, pricePerWh);
         }
     }
 

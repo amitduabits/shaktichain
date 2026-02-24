@@ -11,6 +11,29 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def calculate_mape(actuals: Union[np.ndarray, List[float]], predictions: Union[np.ndarray, List[float]], epsilon: float = 1e-8) -> float:
+    """Backward-compatible helper for tests expecting module-level MAPE."""
+    actual_arr = np.asarray(actuals, dtype=float)
+    pred_arr = np.asarray(predictions, dtype=float)
+    if actual_arr.size == 0:
+        return float("nan")
+    return float(np.mean(np.abs(actual_arr - pred_arr) / (np.abs(actual_arr) + epsilon)) * 100.0)
+
+
+def calculate_coverage(
+    actuals: Union[np.ndarray, List[float]],
+    lower: Union[np.ndarray, List[float]],
+    upper: Union[np.ndarray, List[float]],
+) -> float:
+    """Backward-compatible helper for prediction interval coverage."""
+    actual_arr = np.asarray(actuals, dtype=float)
+    lower_arr = np.asarray(lower, dtype=float)
+    upper_arr = np.asarray(upper, dtype=float)
+    if actual_arr.size == 0:
+        return float("nan")
+    return float(np.mean((actual_arr >= lower_arr) & (actual_arr <= upper_arr)))
+
+
 class TimePeriod(Enum):
     """Time period categories for Indian power grid."""
     PEAK = "peak"           # 18:00-22:00 (evening peak)

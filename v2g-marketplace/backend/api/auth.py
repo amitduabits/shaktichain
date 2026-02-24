@@ -41,7 +41,7 @@ JWT_ALGORITHM = "HS256"
 JWT_EXPIRY_HOURS = 24
 
 # Security scheme
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 
 # Router
 router = APIRouter(prefix="/auth", tags=["authentication"])
@@ -121,13 +121,25 @@ def decode_token(token: str) -> Optional[dict]:
 # === Dependencies ===
 
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security)
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
 ) -> dict:
     """
     Dependency to get the current authenticated user.
 
     Raises HTTPException if token is invalid or expired.
     """
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authenticated",
+        )
+
+    if credentials.scheme.lower() != "bearer":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid authentication credentials",
+        )
+
     token = credentials.credentials
     payload = decode_token(token)
 

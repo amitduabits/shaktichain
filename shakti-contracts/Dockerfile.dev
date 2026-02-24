@@ -1,0 +1,12 @@
+FROM node:22-bookworm-slim
+
+WORKDIR /workspace/shakti-contracts
+
+COPY package*.json ./
+RUN npm ci
+
+COPY . .
+
+EXPOSE 8545
+
+CMD ["npx", "hardhat", "node", "--hostname", "0.0.0.0", "--port", "8545"]

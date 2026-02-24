@@ -9,7 +9,10 @@ from typing import Optional, List, Dict, Any, Tuple
 from pathlib import Path
 import logging
 
-from ..features.price_features import PriceFeatureEngineering, PriceFeatureConfig
+try:
+    from ..features.price_features import PriceFeatureEngineering, PriceFeatureConfig
+except ImportError:  # Supports direct `data.*` imports in integration tests
+    from features.price_features import PriceFeatureEngineering, PriceFeatureConfig
 
 logger = logging.getLogger(__name__)
 

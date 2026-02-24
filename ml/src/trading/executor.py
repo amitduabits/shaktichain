@@ -769,3 +769,7 @@ class BlockchainTradingExecutor:
             "connected": self._w3 is not None and self._w3.is_connected() if self._w3 else False,
             "account": self._account.address if self._account else None,
         }
+
+
+# Backward-compatible alias expected by legacy integration tests.
+TradeExecutor = BlockchainTradingExecutor

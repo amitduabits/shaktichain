@@ -6,5 +6,5 @@
     "lib": ["ESNext"],
     "types": ["@graphprotocol/graph-ts"]
   },
-  "include": ["src/**/*.ts", "tests/**/*.ts"]
+  "include": ["src/**/*.ts", "tests/**/*.ts", "generated/**/*.ts"]
 }

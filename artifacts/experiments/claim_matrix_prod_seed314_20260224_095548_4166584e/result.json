@@ -1,0 +1,45 @@
+{
+  "experiment_id": "claim_matrix_prod_seed314_20260224_095548_4166584e",
+  "config": {
+    "name": "claim_matrix_prod_seed314",
+    "run_mode": "standard",
+    "scenario": "normal_demand",
+    "agent_distribution": "default",
+    "baseline": null,
+    "random_seed": 314,
+    "num_runs": null,
+    "num_agents": null,
+    "duration_hours": null,
+    "clearing_interval_seconds": null,
+    "custom_params": {}
+  },
+  "status": "completed",
+  "start_time": "2026-02-24T09:55:48.381403",
+  "end_time": "2026-02-24T09:55:48.470558",
+  "total_periods": 7200,
+  "completed_periods": 7200,
+  "metrics": {
+    "num_runs": 5,
+    "total_periods": 7200,
+    "clearing_price": {
+      "mean": 5.98673005902115,
+      "std": 1.145302724121124,
+      "min": 4.000711715763508,
+      "max": 7.999792092441397
+    },
+    "clearing_quantity": {
+      "mean": 55.30770926115443,
+      "std": 25.885396864616997
+    },
+    "efficiency": {
+      "mean": 0.9003579585667526,
+      "std": 0.057458139981147086
+    },
+    "total_welfare": {
+      "buyer_surplus_mean": 50.044089997063296,
+      "seller_surplus_mean": 49.97316499988049,
+      "total_surplus_mean": 100.01725499694379
+    }
+  },
+  "errors": []
+}

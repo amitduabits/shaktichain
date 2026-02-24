@@ -6,13 +6,17 @@ Provides REST API for simulation management and price history.
 
 import sys
 import time
+import math
+import hashlib
 from pathlib import Path
 from contextlib import asynccontextmanager
-from typing import Optional
+from datetime import datetime, timedelta, timezone
+from typing import Optional, Literal
 
 from fastapi import FastAPI, HTTPException, Query, Depends, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
+from pydantic import BaseModel, Field
 
 # Load environment variables from .env file
 from dotenv import load_dotenv
@@ -24,6 +28,7 @@ if str(_backend_dir) not in sys.path:
     sys.path.insert(0, str(_backend_dir))
 
 from core.database import get_database, Database
+from core.auction import Bid, McAfeeAuction
 from core.logging import (
     setup_logging,
     get_logger,
@@ -63,6 +68,57 @@ db: Optional[Database] = None
 
 # Logger instance
 logger = get_logger("v2g.api")
+
+
+class AuctionCommitRequest(BaseModel):
+    """Commit phase payload for sealed-bid auction order."""
+
+    round_id: Optional[str] = None
+    prosumer_id: str = Field(..., min_length=1, max_length=128)
+    side: Literal["buy", "sell"]
+    quantity: float = Field(..., gt=0)
+    commit_hash: str = Field(..., min_length=32, max_length=128)
+    reveal_window_minutes: int = Field(10, ge=1, le=240)
+
+
+class AuctionRevealRequest(BaseModel):
+    """Reveal phase payload for previously committed order."""
+
+    round_id: str = Field(..., min_length=1)
+    order_id: str = Field(..., min_length=1)
+    prosumer_id: str = Field(..., min_length=1, max_length=128)
+    side: Literal["buy", "sell"]
+    quantity: float = Field(..., gt=0)
+    price: float = Field(..., gt=0)
+    nonce: str = Field(..., min_length=1, max_length=256)
+
+
+class AuctionSettleBatchRequest(BaseModel):
+    """Settlement request for revealed orders in a round."""
+
+    round_id: str = Field(..., min_length=1)
+    max_matches: int = Field(200, ge=1, le=2000)
+
+
+def _get_db() -> Database:
+    """Get DB instance safely for runtime and tests."""
+    global db
+    resolved = get_database()
+    if db is not resolved:
+        db = resolved
+    return db
+
+
+def _compute_commit_hash(
+    round_id: str,
+    prosumer_id: str,
+    side: str,
+    quantity: float,
+    price: float,
+    nonce: str,
+) -> str:
+    payload = f"{round_id}|{prosumer_id}|{side}|{quantity:.6f}|{price:.6f}|{nonce}"
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 class LoggingMetricsMiddleware(BaseHTTPMiddleware):
@@ -211,7 +267,8 @@ async def readiness_check():
 
     # Check database connection
     try:
-        db.list_simulations(limit=1)
+        database = _get_db()
+        database.list_simulations(limit=1)
         checks["database"] = True
         health_status.set_db_health(True)
     except Exception as e:
@@ -260,7 +317,8 @@ async def create_simulation(
     # Set user context for logging
     set_user_context(current_user.get("id"), current_user.get("email"))
 
-    sim_id = db.save_simulation({
+    database = _get_db()
+    sim_id = database.save_simulation({
         "n_agents": sim.n_agents,
         "n_days": sim.n_days,
     })
@@ -276,7 +334,7 @@ async def create_simulation(
         n_days=sim.n_days,
     )
 
-    result = db.get_simulation(sim_id)
+    result = database.get_simulation(sim_id)
     return result
 
 
@@ -287,7 +345,7 @@ async def list_simulations(
 ):
     """List recent simulations. Requires authentication."""
     set_user_context(current_user.get("id"), current_user.get("email"))
-    return db.list_simulations(limit=limit)
+    return _get_db().list_simulations(limit=limit)
 
 
 @app.get("/simulations/{sim_id}", response_model=SimulationResponse)
@@ -297,7 +355,7 @@ async def get_simulation(
 ):
     """Get a simulation by ID. Requires authentication."""
     set_user_context(current_user.get("id"), current_user.get("email"))
-    result = db.get_simulation(sim_id)
+    result = _get_db().get_simulation(sim_id)
     if result is None:
         raise HTTPException(status_code=404, detail="Simulation not found")
     return result
@@ -313,16 +371,17 @@ async def update_simulation(
     set_user_context(current_user.get("id"), current_user.get("email"))
 
     # Check if simulation exists
-    existing = db.get_simulation(sim_id)
+    database = _get_db()
+    existing = database.get_simulation(sim_id)
     if existing is None:
         raise HTTPException(status_code=404, detail="Simulation not found")
 
     # Apply updates
     update_data = updates.model_dump(exclude_none=True)
     if update_data:
-        db.update_simulation(sim_id, update_data)
+        database.update_simulation(sim_id, update_data)
 
-    return db.get_simulation(sim_id)
+    return database.get_simulation(sim_id)
 
 
 # === Market Period Endpoints ===
@@ -337,12 +396,13 @@ async def create_period(
     set_user_context(current_user.get("id"), current_user.get("email"))
 
     # Verify simulation exists
-    sim = db.get_simulation(period.simulation_id)
+    database = _get_db()
+    sim = database.get_simulation(period.simulation_id)
     if sim is None:
         raise HTTPException(status_code=404, detail="Simulation not found")
 
-    period_id = db.save_period(period.model_dump())
-    periods = db.get_periods(period.simulation_id)
+    period_id = database.save_period(period.model_dump())
+    periods = database.get_periods(period.simulation_id)
     # Return the newly created period
     for p in periods:
         if p["id"] == period_id:
@@ -359,11 +419,12 @@ async def get_simulation_periods(
     set_user_context(current_user.get("id"), current_user.get("email"))
 
     # Verify simulation exists
-    sim = db.get_simulation(sim_id)
+    database = _get_db()
+    sim = database.get_simulation(sim_id)
     if sim is None:
         raise HTTPException(status_code=404, detail="Simulation not found")
 
-    return db.get_periods(sim_id)
+    return database.get_periods(sim_id)
 
 
 # === Price History Endpoints ===
@@ -372,8 +433,9 @@ async def get_simulation_periods(
 @app.post("/prices", response_model=PriceResponse)
 async def create_price(price_data: PriceCreate):
     """Add a price history entry."""
-    price_id = db.save_price(price_data.price, price_data.source)
-    history = db.get_price_history(limit=1)
+    database = _get_db()
+    price_id = database.save_price(price_data.price, price_data.source)
+    history = database.get_price_history(limit=1)
     if history and history[0]["id"] == price_id:
         return history[0]
     raise HTTPException(status_code=500, detail="Failed to retrieve created price")
@@ -382,7 +444,7 @@ async def create_price(price_data: PriceCreate):
 @app.get("/prices", response_model=list[PriceResponse])
 async def get_price_history(limit: int = Query(100, ge=1, le=1000)):
     """Get recent price history."""
-    return db.get_price_history(limit=limit)
+    return _get_db().get_price_history(limit=limit)
 
 
 # === Market Endpoints (for frontend compatibility) ===
@@ -391,18 +453,25 @@ async def get_price_history(limit: int = Query(100, ge=1, le=1000)):
 @app.get("/market/price")
 async def get_current_market_price():
     """Get current energy price."""
-    history = db.get_price_history(limit=1)
+    database = _get_db()
+    history = database.get_price_history(limit=1)
     if history:
         return {
             "price": history[0]["price"],
             "timestamp": history[0]["timestamp"],
             "source": history[0]["source"],
         }
-    # Return default price if no history
+
+    # Compute diurnal baseline when no historical records exist.
+    now = datetime.now(timezone.utc)
+    hour_angle = (2 * math.pi * now.hour) / 24
+    demand_factor = 1.0 + 0.32 * math.sin(hour_angle - 1.2) + 0.11 * math.cos(hour_angle * 2)
+    computed_price = max(2.5, round(5.4 * demand_factor, 4))
+
     return {
-        "price": 6.0,  # Base price in INR/kWh
-        "timestamp": "N/A",
-        "source": "default",
+        "price": computed_price,
+        "timestamp": now.isoformat(),
+        "source": "computed_diurnal_baseline",
     }
 
 
@@ -413,16 +482,26 @@ async def get_market_price_history(
     limit: int = Query(100, ge=1, le=1000)
 ):
     """Get price history for a time range."""
-    # For now, just return recent history
-    # TODO: Add date filtering when needed
-    history = db.get_price_history(limit=limit)
+    history = _get_db().get_price_history(limit=limit)
+    start_dt = datetime.fromisoformat(start) if start else None
+    end_dt = datetime.fromisoformat(end) if end else None
+
+    filtered = []
+    for row in history:
+        ts = datetime.fromisoformat(row["timestamp"])
+        if start_dt and ts < start_dt:
+            continue
+        if end_dt and ts > end_dt:
+            continue
+        filtered.append(row)
+
     return [
         {
             "time": h["timestamp"],
             "price": h["price"],
             "source": h["source"],
         }
-        for h in history
+        for h in filtered
     ]
 
 
@@ -443,7 +522,7 @@ async def start_simulation_job(
     - agent_mix: dict with residential, commercial, fleet percentages
     - region: str
     """
-    sim_service = get_simulation_service(db)
+    sim_service = get_simulation_service(_get_db())
 
     job_id = sim_service.start_simulation(
         num_agents=params.get("num_agents", 100),
@@ -461,7 +540,7 @@ async def get_simulation_job_status(
     current_user: dict = Depends(get_current_user)
 ):
     """Get simulation status and progress."""
-    sim_service = get_simulation_service(db)
+    sim_service = get_simulation_service(_get_db())
     status = sim_service.get_status(job_id)
 
     if status is None:
@@ -478,7 +557,7 @@ async def download_simulation_results(
     """Download simulation results as CSV."""
     from fastapi.responses import Response
 
-    sim_service = get_simulation_service(db)
+    sim_service = get_simulation_service(_get_db())
     csv_data = sim_service.get_results_csv(job_id)
 
     if csv_data is None:
@@ -491,14 +570,58 @@ async def download_simulation_results(
     )
 
 
-# === Prosumer Endpoints (placeholder for future implementation) ===
+# === Prosumer Endpoints ===
+
+
+def _build_prosumer_snapshot(database: Database, limit: int = 100) -> list[dict]:
+    """Build dynamic prosumer list from latest simulation and period records."""
+    latest = database.list_simulations(limit=1)
+    if not latest:
+        return []
+
+    simulation = latest[0]
+    sim_id = simulation["id"]
+    periods = database.get_periods(sim_id)
+    if not periods:
+        return []
+
+    n_agents = max(1, int(simulation["n_agents"]))
+    count = min(limit, n_agents)
+
+    avg_price = sum((p["clearing_price"] or 0.0) for p in periods) / max(1, len(periods))
+    avg_volume = sum((p["volume"] or 0.0) for p in periods) / max(1, len(periods))
+    buyers = sum((p["n_buyers"] or 0) for p in periods)
+    sellers = sum((p["n_sellers"] or 0) for p in periods)
+    flow_skew = (buyers - sellers) / max(1, buyers + sellers)
+
+    prosumers = []
+    for idx in range(count):
+        role = "buyer" if (idx + buyers) % 2 else "seller"
+        relative_weight = 0.92 + ((idx % 9) * 0.02)
+        expected_volume = round((avg_volume / n_agents) * relative_weight, 4)
+        reliability = round(max(0.15, min(0.99, 0.55 + (avg_price / 20) + flow_skew * 0.1 - (idx % 5) * 0.03)), 3)
+        prosumers.append(
+            {
+                "id": f"prosumer_{idx + 1}",
+                "simulation_id": sim_id,
+                "role": role,
+                "expected_volume_kwh": expected_volume,
+                "reliability_score": reliability,
+                "latest_market_price": round(avg_price, 4),
+            }
+        )
+
+    return prosumers
 
 
 @app.get("/prosumers")
-async def get_prosumers(current_user: dict = Depends(get_current_user)):
-    """Get list of active prosumers (placeholder)."""
-    # TODO: Implement actual prosumer tracking
-    return []
+async def get_prosumers(
+    limit: int = Query(100, ge=1, le=2000),
+    current_user: dict = Depends(get_current_user),
+):
+    """Get computed list of active prosumers from current simulation data."""
+    set_user_context(current_user.get("id"), current_user.get("email"))
+    return _build_prosumer_snapshot(_get_db(), limit=limit)
 
 
 @app.get("/prosumers/{prosumer_id}")
@@ -506,9 +629,283 @@ async def get_prosumer_details(
     prosumer_id: str,
     current_user: dict = Depends(get_current_user)
 ):
-    """Get prosumer details by ID (placeholder)."""
-    # TODO: Implement actual prosumer tracking
+    """Get computed details for one prosumer ID."""
+    set_user_context(current_user.get("id"), current_user.get("email"))
+    candidates = _build_prosumer_snapshot(_get_db(), limit=2000)
+    for item in candidates:
+        if item["id"] == prosumer_id:
+            return item
     raise HTTPException(status_code=404, detail="Prosumer not found")
+
+
+# === Auction Commit/Reveal Endpoints ===
+
+
+@app.post("/auction/commit")
+async def auction_commit(
+    request: AuctionCommitRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Commit sealed auction order hash for a round."""
+    set_user_context(current_user.get("id"), current_user.get("email"))
+    database = _get_db()
+
+    if request.round_id:
+        round_id = request.round_id
+        round_data = database.get_auction_round(round_id)
+        if round_data is None:
+            reveal_deadline = (datetime.now(timezone.utc) + timedelta(minutes=request.reveal_window_minutes)).isoformat()
+            database.create_auction_round(reveal_deadline=reveal_deadline, round_id=round_id)
+            round_data = database.get_auction_round(round_id)
+    else:
+        reveal_deadline = (datetime.now(timezone.utc) + timedelta(minutes=request.reveal_window_minutes)).isoformat()
+        round_id = database.create_auction_round(reveal_deadline=reveal_deadline)
+        round_data = database.get_auction_round(round_id)
+
+    if round_data["status"] != "open":
+        raise HTTPException(status_code=409, detail="Auction round is not open")
+
+    if datetime.fromisoformat(round_data["reveal_deadline"]) < datetime.now(timezone.utc):
+        raise HTTPException(status_code=409, detail="Reveal window has already closed")
+
+    order_id = database.save_auction_commit(
+        {
+            "round_id": round_id,
+            "prosumer_id": request.prosumer_id,
+            "side": request.side,
+            "quantity": request.quantity,
+            "commit_hash": request.commit_hash,
+        }
+    )
+
+    return {
+        "round_id": round_id,
+        "order_id": order_id,
+        "prosumer_id": request.prosumer_id,
+        "status": "committed",
+        "reveal_deadline": round_data["reveal_deadline"],
+    }
+
+
+@app.post("/auction/reveal")
+async def auction_reveal(
+    request: AuctionRevealRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Reveal committed order values and validate commit hash."""
+    set_user_context(current_user.get("id"), current_user.get("email"))
+    database = _get_db()
+
+    round_data = database.get_auction_round(request.round_id)
+    if round_data is None:
+        raise HTTPException(status_code=404, detail="Auction round not found")
+    if round_data["status"] != "open":
+        raise HTTPException(status_code=409, detail="Auction round is not open")
+
+    order = database.get_auction_order(request.round_id, request.order_id)
+    if order is None:
+        raise HTTPException(status_code=404, detail="Committed order not found")
+    if order["prosumer_id"] != request.prosumer_id:
+        raise HTTPException(status_code=403, detail="Order ownership mismatch")
+    if order["status"] != "committed":
+        raise HTTPException(status_code=409, detail="Order is not in committed state")
+    if order["side"] != request.side:
+        raise HTTPException(status_code=400, detail="Revealed side does not match committed side")
+    if abs(order["quantity"] - request.quantity) > 1e-9:
+        raise HTTPException(status_code=400, detail="Revealed quantity does not match committed quantity")
+
+    computed_hash = _compute_commit_hash(
+        request.round_id,
+        request.prosumer_id,
+        request.side,
+        request.quantity,
+        request.price,
+        request.nonce,
+    )
+    if computed_hash != order["commit_hash"]:
+        raise HTTPException(status_code=400, detail="Commit hash validation failed")
+
+    if datetime.fromisoformat(round_data["reveal_deadline"]) < datetime.now(timezone.utc):
+        raise HTTPException(status_code=409, detail="Reveal window has closed")
+
+    updated = database.reveal_auction_order(
+        request.round_id,
+        request.order_id,
+        request.price,
+        request.nonce,
+    )
+    if not updated:
+        raise HTTPException(status_code=500, detail="Failed to update revealed order")
+
+    return {
+        "round_id": request.round_id,
+        "order_id": request.order_id,
+        "status": "revealed",
+        "price": request.price,
+    }
+
+
+@app.post("/auction/settle-batch")
+async def auction_settle_batch(
+    request: AuctionSettleBatchRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Settle revealed orders in a round using McAfee matching."""
+    set_user_context(current_user.get("id"), current_user.get("email"))
+    database = _get_db()
+
+    round_data = database.get_auction_round(request.round_id)
+    if round_data is None:
+        raise HTTPException(status_code=404, detail="Auction round not found")
+    if round_data["status"] != "open":
+        raise HTTPException(status_code=409, detail="Auction round already settled")
+    if datetime.fromisoformat(round_data["reveal_deadline"]) > datetime.now(timezone.utc):
+        pending_commits = database.list_auction_orders(request.round_id, status="committed")
+        if pending_commits:
+            raise HTTPException(status_code=409, detail="Reveal window is still open")
+
+    revealed = database.list_auction_orders(request.round_id, status="revealed")
+    bids = [o for o in revealed if o["side"] == "buy"]
+    asks = [o for o in revealed if o["side"] == "sell"]
+
+    if not bids or not asks:
+        database.update_auction_round(
+            request.round_id,
+            status="settled",
+            clearing_price=0.0,
+            matched_orders=0,
+            settled_volume=0.0,
+        )
+        return {
+            "round_id": request.round_id,
+            "status": "settled",
+            "clearing_price": 0.0,
+            "matched_orders": 0,
+            "settled_volume": 0.0,
+            "matches": [],
+        }
+
+    auction = McAfeeAuction()
+    order_lookup = {}
+
+    for row in bids[: request.max_matches]:
+        bid = Bid(
+            agent_id=row["id"],
+            quantity=float(row["quantity"]),
+            price=float(row["price"]),
+            is_buy=True,
+        )
+        auction.add_bid(bid)
+        order_lookup[row["id"]] = row
+
+    for row in asks[: request.max_matches]:
+        bid = Bid(
+            agent_id=row["id"],
+            quantity=float(row["quantity"]),
+            price=float(row["price"]),
+            is_buy=False,
+        )
+        auction.add_bid(bid)
+        order_lookup[row["id"]] = row
+
+    result = auction.clear_market()
+
+    matches = []
+    if result.clearing_price is not None:
+        for buy_bid, sell_bid in zip(result.matched_buyers, result.matched_sellers):
+            quantity = min(buy_bid.quantity, sell_bid.quantity)
+            database.save_auction_match(
+                request.round_id,
+                buy_bid.agent_id,
+                sell_bid.agent_id,
+                quantity,
+                float(result.clearing_price),
+            )
+            database.mark_auction_order_status(request.round_id, buy_bid.agent_id, "settled")
+            database.mark_auction_order_status(request.round_id, sell_bid.agent_id, "settled")
+            matches.append(
+                {
+                    "buy_order_id": buy_bid.agent_id,
+                    "sell_order_id": sell_bid.agent_id,
+                    "quantity": quantity,
+                    "price": float(result.clearing_price),
+                }
+            )
+
+    settled_volume = float(sum(m["quantity"] for m in matches))
+    matched_orders = len(matches) * 2
+    clearing_price = float(result.clearing_price or 0.0)
+
+    database.update_auction_round(
+        request.round_id,
+        status="settled",
+        clearing_price=clearing_price,
+        matched_orders=matched_orders,
+        settled_volume=settled_volume,
+    )
+
+    return {
+        "round_id": request.round_id,
+        "status": "settled",
+        "clearing_price": clearing_price,
+        "matched_orders": matched_orders,
+        "settled_volume": settled_volume,
+        "matches": matches,
+    }
+
+
+@app.get("/auction/round/{round_id}")
+async def get_auction_round(round_id: str, current_user: dict = Depends(get_current_user)):
+    """Get details for one auction round."""
+    set_user_context(current_user.get("id"), current_user.get("email"))
+    database = _get_db()
+    round_data = database.get_auction_round(round_id)
+    if round_data is None:
+        raise HTTPException(status_code=404, detail="Auction round not found")
+
+    orders = database.list_auction_orders(round_id)
+    matches = database.list_auction_matches(round_id)
+
+    return {
+        **round_data,
+        "orders_total": len(orders),
+        "orders_revealed": len([o for o in orders if o["status"] in {"revealed", "settled", "matched"}]),
+        "matches_total": len(matches),
+    }
+
+
+@app.get("/auction/orderbook/{round_id}")
+async def get_auction_orderbook(round_id: str, current_user: dict = Depends(get_current_user)):
+    """Get round orderbook with revealed bids and asks."""
+    set_user_context(current_user.get("id"), current_user.get("email"))
+    database = _get_db()
+    round_data = database.get_auction_round(round_id)
+    if round_data is None:
+        raise HTTPException(status_code=404, detail="Auction round not found")
+
+    orders = database.list_auction_orders(round_id)
+    bids = [o for o in orders if o["side"] == "buy"]
+    asks = [o for o in orders if o["side"] == "sell"]
+
+    # Price visibility is gated by reveal status.
+    def _public_order(row: dict) -> dict:
+        visible = row["status"] in {"revealed", "matched", "settled"}
+        return {
+            "id": row["id"],
+            "prosumer_id": row["prosumer_id"],
+            "side": row["side"],
+            "quantity": row["quantity"],
+            "status": row["status"],
+            "price": row["price"] if visible else None,
+            "created_at": row["created_at"],
+        }
+
+    return {
+        "round_id": round_id,
+        "status": round_data["status"],
+        "bids": [_public_order(o) for o in bids],
+        "asks": [_public_order(o) for o in asks],
+    }
 
 
 if __name__ == "__main__":

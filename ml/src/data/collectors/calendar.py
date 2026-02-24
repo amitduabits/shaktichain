@@ -131,7 +131,7 @@ class CalendarCollector(BaseCollector):
             return cached_data
 
         # Generate hourly timestamps
-        timestamps = pd.date_range(start=start_date, end=end_date, freq="H")
+        timestamps = pd.date_range(start=start_date, end=end_date, freq="h")
 
         data = []
         for ts in timestamps:

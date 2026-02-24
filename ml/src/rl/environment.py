@@ -945,3 +945,56 @@ class V2GTradingEnv(gym.Env):
     def close(self):
         """Clean up resources."""
         pass
+
+
+class V2GEnvironment:
+    """Backward-compatible wrapper around V2GTradingEnv for legacy tests."""
+
+    def __init__(
+        self,
+        battery_capacity: float = 60.0,
+        initial_soc: float = 0.5,
+        max_charge_rate: float = 11.0,
+        max_discharge_rate: float = 11.0,
+        seed: Optional[int] = None,
+    ):
+        config = EnvironmentConfig(
+            battery=BatteryConfig(
+                capacity_kwh=battery_capacity,
+                max_charge_rate_kw=max_charge_rate,
+                max_discharge_rate_kw=max_discharge_rate,
+                initial_soc=initial_soc,
+            ),
+            seed=seed,
+        )
+        self._initial_soc = initial_soc
+        self._env = V2GTradingEnv(config=config, use_discrete_actions=True)
+
+    def _to_legacy_obs(self, obs: np.ndarray) -> Dict[str, Any]:
+        horizon = self._env.config.forecast_horizon
+        current_price_idx = 5 + (2 * horizon)
+        return {
+            "battery_soc": float(obs[0]),
+            "time_of_day": int(round(float(obs[1]) * 23)),
+            "grid_price": float(obs[current_price_idx]) * self._env.config.market.base_price * 5.0,
+            "observation_vector": obs,
+        }
+
+    def reset(self) -> Dict[str, Any]:
+        obs, _info = self._env.reset(options={"initial_soc": self._initial_soc})
+        return self._to_legacy_obs(obs)
+
+    def step(self, action: int):
+        # Legacy action mapping: 0=hold, 1=charge, 2=discharge
+        action_map = {
+            0: (2, 2),  # hold, mid price
+            1: (3, 2),  # charge moderately
+            2: (1, 2),  # discharge moderately
+        }
+        mapped_action = action_map.get(int(action), (2, 2))
+        obs, reward, terminated, truncated, info = self._env.step(mapped_action)
+        done = bool(terminated or truncated)
+        return self._to_legacy_obs(obs), float(reward), done, info
+
+    def close(self):
+        self._env.close()

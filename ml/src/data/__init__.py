@@ -1,7 +1,16 @@
 """Data module for SHAKTI-CHAIN V2G platform."""
 
-from .datamodule import V2GDataModule, TimeSeriesDataset
-from .price_datamodule import PriceDataModule, PriceDataset
+try:
+    from .datamodule import V2GDataModule, TimeSeriesDataset
+except ImportError:
+    V2GDataModule = None
+    TimeSeriesDataset = None
+
+try:
+    from .price_datamodule import PriceDataModule, PriceDataset
+except ImportError:
+    PriceDataModule = None
+    PriceDataset = None
 
 __all__ = [
     "V2GDataModule",

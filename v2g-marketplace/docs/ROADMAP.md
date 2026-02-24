@@ -228,7 +228,7 @@ V2G Marketplace development roadmap, completed features, planned enhancements, a
 ### Q2 2026 (April - June)
 
 #### Smart Charging Optimization
-- [ ] **AI-Powered Scheduling**
+- [ ] **ML-Powered Scheduling**
   - Reinforcement learning agent for optimal charge/discharge times
   - Multi-objective optimization (cost, SOC, battery health)
   - Integration with weather forecasts
@@ -499,3 +499,4 @@ PATCH: Bug fixes
 ---
 
 **Last Updated**: December 2025
+

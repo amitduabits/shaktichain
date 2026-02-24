@@ -146,6 +146,7 @@ class MetricsCalculator:
         allocative_efficiency = (
             actual_surplus / theoretical_max if theoretical_max > 0 else 0
         )
+        allocative_efficiency = max(0.0, min(float(allocative_efficiency), 1.0))
 
         # Price efficiency
         if theoretical_equilibrium_price:
@@ -164,6 +165,7 @@ class MetricsCalculator:
         traded_volume = sum(t["quantity"] for t in trades)
         potential_volume = min(bid_volume, ask_volume)
         volume_efficiency = traded_volume / potential_volume if potential_volume > 0 else 0
+        volume_efficiency = max(0.0, min(float(volume_efficiency), 1.0))
 
         # Convergence rate (how fast prices converge)
         if len(trades) > 10:
@@ -176,7 +178,7 @@ class MetricsCalculator:
             convergence_rate = np.nan
 
         # Deadweight loss
-        deadweight_loss = theoretical_max - actual_surplus
+        deadweight_loss = max(0.0, theoretical_max - actual_surplus)
 
         return EfficiencyMetrics(
             allocative_efficiency=float(allocative_efficiency),
@@ -272,17 +274,20 @@ class MetricsCalculator:
         if not values or all(v == 0 for v in values):
             return 0.0
 
-        values = np.array(values)
-        values = values[values > 0]  # Only consider positive values
+        arr = np.array(values, dtype=float)
+        min_val = float(np.min(arr))
+        if min_val < 0:
+            arr = arr - min_val
 
-        if len(values) == 0:
+        if np.allclose(arr.sum(), 0.0):
             return 0.0
 
-        sorted_values = np.sort(values)
+        sorted_values = np.sort(arr)
         n = len(sorted_values)
         index = np.arange(1, n + 1)
 
-        return (np.sum((2 * index - n - 1) * sorted_values)) / (n * np.sum(sorted_values))
+        gini = (np.sum((2 * index - n - 1) * sorted_values)) / (n * np.sum(sorted_values))
+        return float(max(0.0, min(gini, 1.0)))
 
     def _calculate_jains_fairness(self, values: list[float]) -> float:
         """Calculate Jain's fairness index."""

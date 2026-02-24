@@ -122,8 +122,8 @@ class StatisticalAnalyzer:
     ):
         self.alpha = alpha
         self.alpha_critical = alpha_critical
-        self.bonferroni_correction = bonferroni_correction
-        self.benjamini_hochberg = benjamini_hochberg
+        self.use_bonferroni_correction = bonferroni_correction
+        self.use_benjamini_hochberg = benjamini_hochberg
         self.bootstrap_samples = bootstrap_samples
 
     # =========================================================================

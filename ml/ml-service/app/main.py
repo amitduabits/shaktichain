@@ -115,6 +115,7 @@ async def warmup_models(app: FastAPI):
         try:
             start = time.time()
             await app.state.model_loader.load_model(model_name, stage)
+            app.state.model_cache.mark_loaded(model_name)
             duration = time.time() - start
             MODEL_LOAD_TIME.labels(model_type=model_type).observe(duration)
             logger.info(f"Loaded {model_name} ({stage}) in {duration:.2f}s")
@@ -236,7 +237,7 @@ async def readiness_check(request: Request):
     required_models = ["forecast_load", "trading_agent"]
 
     for model_name in required_models:
-        if not await request.app.state.model_cache.is_loaded(model_name):
+        if not request.app.state.model_loader.is_loaded(model_name):
             return JSONResponse(
                 content={"ready": False, "reason": f"Model {model_name} not loaded"},
                 status_code=503

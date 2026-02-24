@@ -1,0 +1,19 @@
+FROM python:3.11-slim
+
+WORKDIR /workspace/experiments
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r /tmp/requirements.txt
+
+COPY . .
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/workspace
+
+CMD ["python", "scripts/run_claims.py", "--mode", "prod", "--output", "/workspace/artifacts/claim_matrix"]

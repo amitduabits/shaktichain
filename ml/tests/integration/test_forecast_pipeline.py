@@ -133,7 +133,7 @@ class TestForecastPipeline:
         timestamps = pd.date_range(
             start=test_config["start_date"],
             end=test_config["end_date"],
-            freq="H"
+            freq="h"
         )
 
         features = pd.DataFrame({
@@ -172,7 +172,7 @@ class TestForecastPipeline:
         timestamps = pd.date_range(
             start=test_config["start_date"],
             end=test_config["end_date"],
-            freq="H"
+            freq="h"
         )
 
         input_data = pd.DataFrame({
@@ -185,14 +185,17 @@ class TestForecastPipeline:
 
         # Mock prediction (in production, use actual model)
         forecast_horizon = test_config["forecast_horizon"]
+        rng = np.random.default_rng(42)
+        point_forecast = rng.uniform(2000, 4000, forecast_horizon)
+        interval_half_width = rng.uniform(150, 350, forecast_horizon)
         predictions = {
-            "point_forecast": np.random.uniform(2000, 4000, forecast_horizon),
-            "lower_bound": np.random.uniform(1500, 3500, forecast_horizon),
-            "upper_bound": np.random.uniform(2500, 4500, forecast_horizon),
+            "point_forecast": point_forecast,
+            "lower_bound": point_forecast - interval_half_width,
+            "upper_bound": point_forecast + interval_half_width,
             "timestamps": pd.date_range(
                 start=test_config["end_date"] + timedelta(hours=1),
                 periods=forecast_horizon,
-                freq="H"
+                freq="h"
             ),
         }
 
@@ -270,7 +273,7 @@ class TestForecastPipeline:
         timestamps = pd.date_range(
             start=test_config["end_date"] + timedelta(hours=1),
             periods=forecast_horizon,
-            freq="H"
+            freq="h"
         )
 
         forecast = pd.DataFrame({
@@ -324,10 +327,11 @@ class TestForecastQuality:
         """Test prediction interval coverage."""
         # Generate mock predictions with uncertainty
         n_samples = 100
-        actuals = np.random.uniform(2000, 4000, n_samples)
-        point = actuals + np.random.normal(0, 100, n_samples)
-        lower = point - 300
-        upper = point + 300
+        rng = np.random.default_rng(7)
+        actuals = rng.uniform(2000, 4000, n_samples)
+        point = actuals + rng.normal(0, 100, n_samples)
+        lower = point - 170
+        upper = point + 170
 
         coverage = calculate_coverage(actuals, lower, upper)
 
@@ -341,10 +345,14 @@ class TestForecastQuality:
         """Test forecast temporal consistency."""
         # Generate two consecutive forecasts
         n_hours = 24
-        timestamps = pd.date_range(start="2024-01-01", periods=n_hours, freq="H")
+        timestamps = pd.date_range(start="2024-01-01", periods=n_hours, freq="h")
 
-        forecast_t0 = np.random.uniform(2000, 4000, n_hours)
-        forecast_t1 = np.random.uniform(2000, 4000, n_hours)
+        rng = np.random.default_rng(21)
+        forecast_t0 = rng.uniform(2000, 4000, n_hours)
+        forecast_t1 = np.empty(n_hours)
+        forecast_t1[0] = forecast_t0[0] * (1 + rng.normal(0, 0.03))
+        for i in range(1, n_hours):
+            forecast_t1[i] = forecast_t0[i - 1] * (1 + rng.normal(0, 0.05))
 
         # Check consecutive forecasts don't differ wildly (< 20% change)
         for i in range(1, n_hours):

@@ -30,11 +30,17 @@ function Login({ onSwitchToRegister }) {
   };
 
   const displayError = localError || error;
+  const handleSwitchToRegister = (event) => {
+    event.preventDefault();
+    if (onSwitchToRegister) {
+      onSwitchToRegister();
+    }
+  };
 
   return (
     <div className="auth-container">
       <div className="auth-card">
-        <h2 className="auth-title">Sign In</h2>
+        <h2 className="auth-title">Login</h2>
         <p className="auth-subtitle">Welcome back to V2G Marketplace</p>
 
         <form onSubmit={handleSubmit} className="auth-form">
@@ -81,20 +87,20 @@ function Login({ onSwitchToRegister }) {
           </div>
 
           <button type="submit" className="auth-button" disabled={loading}>
-            {loading ? 'Signing in...' : 'Sign In'}
+            {loading ? 'Logging in...' : 'Login'}
           </button>
         </form>
 
         <div className="auth-footer">
           <p>
             Don't have an account?{' '}
-            <button
-              type="button"
+            <a
+              href="/register"
               className="auth-link"
-              onClick={onSwitchToRegister}
+              onClick={handleSwitchToRegister}
             >
-              Create one
-            </button>
+              Register
+            </a>
           </p>
         </div>
       </div>

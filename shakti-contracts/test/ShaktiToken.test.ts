@@ -16,30 +16,33 @@ describe("ShaktiToken", function () {
   const MINTER_ROLE = ethers.keccak256(ethers.toUtf8Bytes("MINTER_ROLE"));
   const PAUSER_ROLE = ethers.keccak256(ethers.toUtf8Bytes("PAUSER_ROLE"));
   const BURNER_ROLE = ethers.keccak256(ethers.toUtf8Bytes("BURNER_ROLE"));
+  const ENERGY_SETTLEMENT_ROLE = ethers.keccak256(ethers.toUtf8Bytes("ENERGY_SETTLEMENT_ROLE"));
 
   async function deployTokenFixture() {
-    const [admin, holder, user1, user2, minter, pauser, burner] = await ethers.getSigners();
+    const [admin, holder, user1, user2, minter, pauser, burner, settlementOperator] = await ethers.getSigners();
 
     const ShaktiTokenFactory = await ethers.getContractFactory("ShaktiToken");
     const token = await ShaktiTokenFactory.deploy(admin.address, holder.address);
     await token.waitForDeployment();
 
-    return { token, admin, holder, user1, user2, minter, pauser, burner };
+    return { token, admin, holder, user1, user2, minter, pauser, burner, settlementOperator };
   }
 
   async function deployTokenWithRolesFixture() {
-    const { token, admin, holder, user1, user2, minter, pauser, burner } = await loadFixture(deployTokenFixture);
+    const { token, admin, holder, user1, user2, minter, pauser, burner, settlementOperator } =
+      await loadFixture(deployTokenFixture);
 
     // Grant roles to specific accounts
     await token.connect(admin).grantRole(MINTER_ROLE, minter.address);
     await token.connect(admin).grantRole(PAUSER_ROLE, pauser.address);
     await token.connect(admin).grantRole(BURNER_ROLE, burner.address);
+    await token.connect(admin).grantRole(ENERGY_SETTLEMENT_ROLE, settlementOperator.address);
 
     // Transfer some tokens to burner for fee burning tests
     const transferAmount = ethers.parseEther("1000000"); // 1 million tokens
     await token.connect(holder).transfer(burner.address, transferAmount);
 
-    return { token, admin, holder, user1, user2, minter, pauser, burner };
+    return { token, admin, holder, user1, user2, minter, pauser, burner, settlementOperator };
   }
 
   // ============ Deployment Tests ============
@@ -69,6 +72,7 @@ describe("ShaktiToken", function () {
       expect(await token.hasRole(MINTER_ROLE, admin.address)).to.be.true;
       expect(await token.hasRole(PAUSER_ROLE, admin.address)).to.be.true;
       expect(await token.hasRole(BURNER_ROLE, admin.address)).to.be.true;
+      expect(await token.hasRole(ENERGY_SETTLEMENT_ROLE, admin.address)).to.be.true;
     });
 
     it("should revert if admin is zero address", async function () {
@@ -325,6 +329,56 @@ describe("ShaktiToken", function () {
 
       await expect(token.connect(minter).mint(user1.address, 0))
         .to.be.revertedWithCustomError(token, "ZeroAmount");
+    });
+  });
+
+  // ============ Energy Settlement Lifecycle Tests ============
+  describe("Energy Settlement APIs", function () {
+    it("should mintForEnergy for settlement role", async function () {
+      const { token, holder, settlementOperator, user1 } = await loadFixture(deployTokenWithRolesFixture);
+      const amount = ethers.parseEther("1000");
+      const deliveryId = ethers.keccak256(ethers.toUtf8Bytes("delivery-001"));
+
+      // Create mint capacity below MAX_SUPPLY first.
+      await token.connect(holder).burn(amount);
+
+      await expect(token.connect(settlementOperator).mintForEnergy(user1.address, amount, deliveryId))
+        .to.emit(token, "EnergyMinted")
+        .withArgs(settlementOperator.address, user1.address, amount, deliveryId);
+
+      expect(await token.balanceOf(user1.address)).to.equal(amount);
+    });
+
+    it("should revert mintForEnergy for non settlement role", async function () {
+      const { token, user1 } = await loadFixture(deployTokenWithRolesFixture);
+      const deliveryId = ethers.keccak256(ethers.toUtf8Bytes("delivery-002"));
+
+      await expect(token.connect(user1).mintForEnergy(user1.address, 1n, deliveryId))
+        .to.be.revertedWithCustomError(token, "AccessControlUnauthorizedAccount")
+        .withArgs(user1.address, ENERGY_SETTLEMENT_ROLE);
+    });
+
+    it("should burnOnRedeem for settlement role", async function () {
+      const { token, holder, settlementOperator, user1 } = await loadFixture(deployTokenWithRolesFixture);
+      const amount = ethers.parseEther("500");
+      const redemptionId = ethers.keccak256(ethers.toUtf8Bytes("redeem-001"));
+
+      await token.connect(holder).transfer(user1.address, amount);
+
+      await expect(token.connect(settlementOperator).burnOnRedeem(user1.address, amount, redemptionId))
+        .to.emit(token, "RedeemBurned")
+        .withArgs(settlementOperator.address, user1.address, amount, redemptionId);
+
+      expect(await token.balanceOf(user1.address)).to.equal(0);
+    });
+
+    it("should revert burnOnRedeem when balance is insufficient", async function () {
+      const { token, settlementOperator, user1 } = await loadFixture(deployTokenWithRolesFixture);
+      const amount = ethers.parseEther("1");
+      const redemptionId = ethers.keccak256(ethers.toUtf8Bytes("redeem-002"));
+
+      await expect(token.connect(settlementOperator).burnOnRedeem(user1.address, amount, redemptionId))
+        .to.be.revertedWithCustomError(token, "InsufficientBalance");
     });
   });
 

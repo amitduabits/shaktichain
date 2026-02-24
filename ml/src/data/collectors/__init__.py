@@ -5,7 +5,12 @@ from .calendar import CalendarCollector, CalendarConfig
 from .iex import IEXCollector, IEXConfig
 from .posoco import POSOCOCollector, POSOCOConfig
 from .synthetic_grid import SyntheticGridCollector, SyntheticGridConfig
-from .weather import WeatherCollector, WeatherConfig, WeatherSimulator
+from .weather import (
+    LocationConfig,
+    WeatherCollector,
+    WeatherConfig,
+    WeatherSimulator,
+)
 
 __all__ = [
     "BaseCollector",
@@ -17,6 +22,7 @@ __all__ = [
     "WeatherCollector",
     "WeatherConfig",
     "WeatherSimulator",
+    "LocationConfig",
     "CalendarCollector",
     "CalendarConfig",
     "SyntheticGridCollector",

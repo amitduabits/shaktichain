@@ -121,6 +121,7 @@ function SimulationPanel() {
           clearInterval(pollIntervalRef.current);
           pollIntervalRef.current = null;
         }
+        return 'completed';
       } else if (statusData.status === 'failed') {
         setStatus('error');
         setError(statusData.error || 'Simulation failed');
@@ -128,6 +129,7 @@ function SimulationPanel() {
           clearInterval(pollIntervalRef.current);
           pollIntervalRef.current = null;
         }
+        return 'failed';
       } else {
         // Still running
         const percent = statusData.progress || 0;
@@ -148,10 +150,12 @@ function SimulationPanel() {
           totalDays,
           estimatedTimeRemaining,
         });
+        return statusData.status || 'running';
       }
     } catch (err) {
       console.error('Error polling status:', err);
       // Don't stop polling on transient errors
+      return 'error';
     }
   }, [config.duration]);
 
@@ -179,8 +183,13 @@ function SimulationPanel() {
       const id = response.job_id;
       setJobId(id);
 
-      // Start polling every 2 seconds
-      pollIntervalRef.current = setInterval(() => pollStatus(id), 2000);
+      // Poll once immediately so UI updates with real backend state.
+      const firstStatus = await pollStatus(id);
+
+      // Continue polling every 2 seconds while the simulation is active.
+      if (firstStatus !== 'completed' && firstStatus !== 'failed') {
+        pollIntervalRef.current = setInterval(() => pollStatus(id), 2000);
+      }
     } catch (err) {
       setStatus('error');
       setError(err.message || 'Failed to start simulation');
@@ -372,7 +381,7 @@ function SimulationPanel() {
             <div className="result-card">
               <span className="result-card-label">Average Price</span>
               <span className="result-card-value">
-                ₹{results.averagePrice?.toFixed(2) || '--'}/kWh
+                INR {results.averagePrice?.toFixed(2) || '--'}/kWh
               </span>
             </div>
 
@@ -386,14 +395,14 @@ function SimulationPanel() {
             <div className="result-card">
               <span className="result-card-label">Grid Savings</span>
               <span className="result-card-value highlight">
-                ₹{results.gridSavings?.toLocaleString() || '--'}
+                INR {results.gridSavings?.toLocaleString() || '--'}
               </span>
             </div>
 
             <div className="result-card">
               <span className="result-card-label">Carbon Offset</span>
               <span className="result-card-value">
-                {results.carbonOffset?.toFixed(1) || '--'} tons CO₂
+                {results.carbonOffset?.toFixed(1) || '--'} tons CO2
               </span>
             </div>
 
@@ -423,3 +432,4 @@ function SimulationPanel() {
 }
 
 export default SimulationPanel;
+

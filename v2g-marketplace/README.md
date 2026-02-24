@@ -17,7 +17,7 @@ V2G Marketplace enables electric vehicle (EV) owners to participate in India's e
 - **Realistic Indian Grid Modeling**: Incorporates authentic demand profiles from 8 major Indian cities
 - **Blockchain Integration**: Smart contracts for transparent, tamper-proof energy trading
 - **Token Economics**: SHAKTI tokens with velocity-based pricing and staking mechanisms
-- **AI-Powered Agents**: Three agent types (residential, commercial, fleet) with SOC-based decision making
+- **ML-Powered Agents**: Three agent types (residential, commercial, fleet) with SOC-based decision making
 - **Production-Ready**: Complete Docker deployment, monitoring, and testing infrastructure
 
 ## Quick Start
@@ -603,3 +603,4 @@ This platform is designed to support:
 ---
 
 **Built with ❤️ for India's sustainable energy future**
+

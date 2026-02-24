@@ -183,6 +183,11 @@ class FeatureEngineer:
         """
         df = df.copy()
 
+        if "temperature_c" not in df.columns and "temperature" in df.columns:
+            df["temperature_c"] = df["temperature"]
+        if "humidity_pct" not in df.columns and "humidity" in df.columns:
+            df["humidity_pct"] = df["humidity"]
+
         # Temperature categories
         if "temperature_c" in df.columns:
             df["temp_category"] = pd.cut(
@@ -215,6 +220,42 @@ class FeatureEngineer:
             )
 
         logger.info("Created weather-derived features")
+        return df
+
+    @staticmethod
+    def create_lag_features(
+        df: pd.DataFrame,
+        value_col: str = "load_mw",
+        lag_hours: Optional[List[int]] = None,
+    ) -> pd.DataFrame:
+        """Create lag features for the primary load column."""
+        df = df.copy()
+        lag_hours = lag_hours or [24, 168]
+
+        if value_col not in df.columns:
+            return df
+
+        for lag in lag_hours:
+            df[f"load_lag_{lag}"] = df[value_col].shift(lag)
+
+        return df
+
+    @staticmethod
+    def create_rolling_features(
+        df: pd.DataFrame,
+        value_col: str = "load_mw",
+        windows: Optional[List[int]] = None,
+    ) -> pd.DataFrame:
+        """Create rolling features for the primary load column."""
+        df = df.copy()
+        windows = windows or [24]
+
+        if value_col not in df.columns:
+            return df
+
+        for window in windows:
+            df[f"load_rolling_mean_{window}"] = df[value_col].rolling(window=window, min_periods=1).mean()
+
         return df
 
     @staticmethod
@@ -256,6 +297,8 @@ class FeatureEngineer:
         include_cyclical: bool = True,
         include_demand: bool = True,
         include_weather: bool = True,
+        include_lags: bool = True,
+        include_rolling: bool = True,
         include_price: bool = True,
     ) -> pd.DataFrame:
         """Create all feature engineering transformations.
@@ -266,6 +309,8 @@ class FeatureEngineer:
             include_cyclical: Include cyclical encoding
             include_demand: Include demand-specific features
             include_weather: Include weather features
+            include_lags: Include lag features for load
+            include_rolling: Include rolling stats for load
             include_price: Include price features
 
         Returns:
@@ -288,8 +333,18 @@ class FeatureEngineer:
         if include_weather:
             df = self.create_weather_features(df)
 
+        if include_lags:
+            df = self.create_lag_features(df, value_col="load_mw", lag_hours=[24, 168])
+
+        if include_rolling:
+            df = self.create_rolling_features(df, value_col="load_mw", windows=[24])
+
         if include_price:
             df = self.create_price_features(df)
 
         logger.info(f"Feature engineering complete. Output shape: {df.shape}")
         return df
+
+    def transform(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Backward-compatible transform entrypoint."""
+        return self.create_all_features(df)

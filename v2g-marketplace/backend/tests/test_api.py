@@ -12,6 +12,7 @@ Tests cover:
 import os
 import sys
 import tempfile
+import hashlib
 from pathlib import Path
 from datetime import datetime, timedelta
 
@@ -33,7 +34,13 @@ class TestSetup:
     def setup_test_db(self):
         """Create fresh test database for each test."""
         # Import here to ensure environment is set
-        from backend.core.database import Database
+        from backend.core.database import Database, reset_database
+
+        # Keep test DB path deterministic per test module even when other test
+        # modules mutate process-wide env vars during collection.
+        os.environ["V2G_DB_PATH"] = TEST_DB_PATH
+
+        reset_database()
 
         # Create fresh database
         self.db = Database(TEST_DB_PATH)
@@ -43,6 +50,7 @@ class TestSetup:
 
         # Cleanup
         self.db.close()
+        reset_database()
         if os.path.exists(TEST_DB_PATH):
             os.unlink(TEST_DB_PATH)
 
@@ -50,7 +58,8 @@ class TestSetup:
     def client(self, setup_test_db):
         """Create test client."""
         from backend.api.main import app
-        return TestClient(app)
+        with TestClient(app) as test_client:
+            yield test_client
 
     @pytest.fixture
     def auth_token(self, client):
@@ -462,6 +471,86 @@ class TestPriceEndpoints(TestSetup):
         # Limit > 1000 should fail
         response = client.get("/prices?limit=1001")
         assert response.status_code == 422
+
+
+class TestAuctionEndpoints(TestSetup):
+    """Test commit-reveal auction endpoints."""
+
+    @staticmethod
+    def _commit_hash(round_id: str, prosumer_id: str, side: str, quantity: float, price: float, nonce: str) -> str:
+        payload = f"{round_id}|{prosumer_id}|{side}|{quantity:.6f}|{price:.6f}|{nonce}"
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+    def test_commit_reveal_settle_round_trip(self, client, auth_headers):
+        round_id = "round-test-001"
+        buy_nonce = "n1"
+        sell_nonce = "n2"
+        buy_price = 7.2
+        sell_price = 6.4
+
+        buy_hash = self._commit_hash(round_id, "p1", "buy", 20.0, buy_price, buy_nonce)
+        sell_hash = self._commit_hash(round_id, "p2", "sell", 20.0, sell_price, sell_nonce)
+
+        commit_buy = client.post("/auction/commit", json={
+            "round_id": round_id,
+            "prosumer_id": "p1",
+            "side": "buy",
+            "quantity": 20.0,
+            "commit_hash": buy_hash,
+            "reveal_window_minutes": 1,
+        }, headers=auth_headers)
+        assert commit_buy.status_code == 200
+        buy_order_id = commit_buy.json()["order_id"]
+
+        commit_sell = client.post("/auction/commit", json={
+            "round_id": round_id,
+            "prosumer_id": "p2",
+            "side": "sell",
+            "quantity": 20.0,
+            "commit_hash": sell_hash,
+            "reveal_window_minutes": 1,
+        }, headers=auth_headers)
+        assert commit_sell.status_code == 200
+        sell_order_id = commit_sell.json()["order_id"]
+
+        reveal_buy = client.post("/auction/reveal", json={
+            "round_id": round_id,
+            "order_id": buy_order_id,
+            "prosumer_id": "p1",
+            "side": "buy",
+            "quantity": 20.0,
+            "price": buy_price,
+            "nonce": buy_nonce,
+        }, headers=auth_headers)
+        assert reveal_buy.status_code == 200
+
+        reveal_sell = client.post("/auction/reveal", json={
+            "round_id": round_id,
+            "order_id": sell_order_id,
+            "prosumer_id": "p2",
+            "side": "sell",
+            "quantity": 20.0,
+            "price": sell_price,
+            "nonce": sell_nonce,
+        }, headers=auth_headers)
+        assert reveal_sell.status_code == 200
+
+        settle = client.post("/auction/settle-batch", json={
+            "round_id": round_id,
+            "max_matches": 20,
+        }, headers=auth_headers)
+        assert settle.status_code == 200
+        assert settle.json()["status"] == "settled"
+        assert settle.json()["matched_orders"] >= 0
+
+        round_info = client.get(f"/auction/round/{round_id}", headers=auth_headers)
+        assert round_info.status_code == 200
+        assert round_info.json()["status"] == "settled"
+
+        orderbook = client.get(f"/auction/orderbook/{round_id}", headers=auth_headers)
+        assert orderbook.status_code == 200
+        assert "bids" in orderbook.json()
+        assert "asks" in orderbook.json()
 
 
 class TestErrorHandling(TestSetup):

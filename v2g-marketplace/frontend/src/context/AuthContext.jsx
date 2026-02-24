@@ -56,7 +56,7 @@ export function AuthProvider({ children }) {
     try {
       const userData = await getCurrentUser();
       setUser(userData);
-    } catch (err) {
+    } catch (_error) {
       logout();
     } finally {
       setLoading(false);

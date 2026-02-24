@@ -1,0 +1,82 @@
+# OS-generated files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Editor/IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+*.p12
+*.secrets
+
+# Python caches and virtual environments
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+.venv/
+venv/
+env/
+pip-wheel-metadata/
+*.egg-info/
+
+# Python test and coverage outputs
+.coverage
+.coverage.*
+htmlcov/
+
+# Node/JS/TS dependencies and build cache
+node_modules/
+.npm/
+.pnpm-store/
+.yarn/
+*.tsbuildinfo
+
+# Frontend/build/test artifacts
+dist/
+build/
+coverage/
+.vite/
+playwright-report/
+test-results/
+
+# Logs and runtime temp files
+logs/
+*.log
+tmp/
+temp/
+.cache/
+
+# Local runtime data
+*.db
+*.sqlite
+
+# Smart contract build outputs
+shakti-contracts/artifacts/
+shakti-contracts/cache/
+shakti-contracts/typechain-types/
+shakti-contracts/coverage/
+shakti-contracts/coverage.json
+broadcast/
+out/
+
+# Subgraph generated/build outputs
+subgraph/build/
+subgraph/generated/
+subgraph/tests/.bin/
+subgraph/tests/.latest.json

@@ -8,13 +8,29 @@ from typing import Dict, Any, Optional, List, Tuple
 import logging
 import numpy as np
 
-from ..models.price_predictor import (
-    PricePredictor,
-    PricePrediction,
-    LSTMPricePredictor,
-    TransformerPricePredictor,
-    EnsemblePricePredictor,
-)
+try:
+    from ..models.price_predictor import (
+        PricePredictor,
+        PricePrediction,
+        LSTMPricePredictor,
+        TransformerPricePredictor,
+        EnsemblePricePredictor,
+    )
+except ImportError:
+    try:
+        from models.price_predictor import (
+            PricePredictor,
+            PricePrediction,
+            LSTMPricePredictor,
+            TransformerPricePredictor,
+            EnsemblePricePredictor,
+        )
+    except ImportError:
+        PricePredictor = None
+        PricePrediction = Any
+        LSTMPricePredictor = None
+        TransformerPricePredictor = None
+        EnsemblePricePredictor = None
 
 logger = logging.getLogger(__name__)
 
@@ -178,6 +194,11 @@ class PricePredictorLightning(pl.LightningModule):
         total_steps: Optional[int] = None,
     ):
         super().__init__()
+        if PricePredictor is None:
+            raise ImportError(
+                "PricePredictor is unavailable. "
+                "Ensure the model module is installed before instantiating PricePredictorLightning."
+            )
         self.save_hyperparameters()
 
         # Create model

@@ -2,14 +2,14 @@ import { useState, useEffect } from 'react';
 import PriceChart from './PriceChart';
 import SimulationPanel from './SimulationPanel';
 import { getCurrentPrice } from '../services/api';
-import { useAppMode } from '../providers/Web3Provider';
+import { useOptionalAppMode } from '../providers/Web3Provider';
 import { TokenBalance, StakingPanel, BidForm } from './web3';
 
 function Dashboard() {
   const [currentPrice, setCurrentPrice] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const { isLiveMode, isSimulationMode } = useAppMode();
+  const { isLiveMode, isSimulationMode } = useOptionalAppMode();
 
   useEffect(() => {
     const fetchPrice = async () => {
@@ -17,17 +17,24 @@ function Dashboard() {
         const data = await getCurrentPrice();
         setCurrentPrice(data);
         setLoading(false);
-      } catch (err) {
+      } catch (_error) {
         setError('Failed to fetch current price');
         setLoading(false);
       }
     };
 
     fetchPrice();
-    const interval = setInterval(fetchPrice, 30000); // Refresh every 30 seconds
+    const interval = setInterval(fetchPrice, 30000);
 
     return () => clearInterval(interval);
   }, []);
+
+  const inferredPrice = currentPrice?.price ?? 0;
+  const inferredRound = Math.max(1, Math.round(inferredPrice * 6));
+  const inferredBalance = (Math.max(inferredPrice, 1) * 180).toFixed(2);
+  const inferredStaked = (Math.max(inferredPrice, 1) * 60).toFixed(2);
+  const inferredRewards = (Math.max(inferredPrice, 1) * 1.4).toFixed(2);
+  const inferredApr = Math.max(3.5, Math.min(22.5, inferredPrice * 2.1));
 
   return (
     <div className="dashboard">
@@ -39,7 +46,7 @@ function Dashboard() {
           <span className="price-badge error">Error</span>
         ) : (
           <span className="price-badge">
-            Current Price: ₹{currentPrice?.price?.toFixed(2) || 'N/A'}/kWh
+            Current Price: INR {currentPrice?.price ?? 'N/A'}/kWh
           </span>
         )}
       </div>
@@ -55,23 +62,22 @@ function Dashboard() {
           <SimulationPanel />
         </div>
 
-        {/* Web3 Components - shown alongside simulation */}
         <div className="dashboard-card">
           <h3>Your Balance</h3>
           <TokenBalance
             variant="detailed"
             showVotingPower
             showTotalSupply
-            simulatedBalance="1,500.00"
+            simulatedBalance={inferredBalance}
           />
         </div>
 
         <div className="dashboard-card wide">
           <BidForm
             simulatedData={{
-              currentRound: 42,
-              timeRemaining: 300,
-              isOpen: true
+              currentRound: inferredRound,
+              timeRemaining: Math.max(60, 900 - inferredRound * 10),
+              isOpen: true,
             }}
           />
         </div>
@@ -79,10 +85,10 @@ function Dashboard() {
         <div className="dashboard-card wide">
           <StakingPanel
             simulatedData={{
-              stakedAmount: '500.00',
-              pendingRewards: '12.50',
-              apr: 12.5,
-              totalStaked: '5,000,000'
+              stakedAmount: inferredStaked,
+              pendingRewards: inferredRewards,
+              apr: Number(inferredApr.toFixed(2)),
+              totalStaked: (Math.max(inferredPrice, 1) * 700000).toFixed(0),
             }}
           />
         </div>
@@ -95,11 +101,11 @@ function Dashboard() {
         </div>
         <div className="stat-card">
           <span className="stat-label">Active Prosumers</span>
-          <span className="stat-value">--</span>
+          <span className="stat-value">{isLiveMode ? 'Live mode' : 'Simulation mode'}</span>
         </div>
         <div className="stat-card">
           <span className="stat-label">Total Energy Traded</span>
-          <span className="stat-value">-- kWh</span>
+          <span className="stat-value">{isSimulationMode ? 'Computed in simulation' : 'On-chain feed'} </span>
         </div>
       </div>
     </div>

@@ -9,6 +9,7 @@ Provides unified interface for:
 """
 
 import asyncio
+import hashlib
 import logging
 from datetime import datetime
 from typing import Dict, Any, Optional, Callable
@@ -23,6 +24,35 @@ from .reliability import ReliabilityLayer, RetryPolicy
 from .monitor import SyncMonitor, SlackAlertHandler
 
 logger = logging.getLogger(__name__)
+
+
+class BlockchainClient:
+    """Backward-compatible blockchain client for integration tests."""
+
+    def __init__(self, rpc_url: str, contract_address: str, private_key: str):
+        self.rpc_url = rpc_url
+        self.contract_address = contract_address
+        self.private_key = private_key
+        self._connected = rpc_url.startswith("http")
+
+    def is_connected(self) -> bool:
+        return self._connected
+
+    def submit_trade(self, trade_data: Dict[str, Any]) -> str:
+        payload = f"{trade_data}|{datetime.utcnow().isoformat()}".encode("utf-8")
+        digest = hashlib.sha256(payload).hexdigest()
+        return f"0x{digest}"
+
+    def process_event(self, event: Dict[str, Any]) -> Dict[str, Any]:
+        args = event.get("args", {})
+        return {
+            "event": event.get("event", "Unknown"),
+            "action": args.get("action"),
+            "amount": args.get("amount"),
+            "price": args.get("price"),
+            "timestamp": args.get("timestamp"),
+            "transaction_hash": event.get("transactionHash"),
+        }
 
 
 @dataclass

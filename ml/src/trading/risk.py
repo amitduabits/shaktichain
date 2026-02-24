@@ -11,7 +11,7 @@ Provides:
 import asyncio
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
 from collections import deque
@@ -127,6 +127,10 @@ class RiskManager:
         self,
         config: Optional[RiskConfig] = None,
         feature_store=None,
+        max_position_size: Optional[float] = None,
+        max_daily_loss: Optional[float] = None,
+        min_soc: Optional[float] = None,
+        max_soc: Optional[float] = None,
     ):
         """Initialize risk manager.
 
@@ -134,8 +138,18 @@ class RiskManager:
             config: Risk configuration
             feature_store: Feature store for price data
         """
-        self.config = config or RiskConfig()
+        if config is None:
+            limits = RiskLimits()
+            if max_position_size is not None:
+                limits.max_trade_size = max_position_size
+            if max_daily_loss is not None:
+                limits.max_daily_loss = max_daily_loss
+            config = RiskConfig(limits=limits)
+
+        self.config = config
         self.feature_store = feature_store
+        self._legacy_min_soc = min_soc
+        self._legacy_max_soc = max_soc
 
         # Position tracking
         self._current_position: float = 0.0  # Net position in kWh
@@ -166,6 +180,23 @@ class RiskManager:
             "rejections": 0,
             "violations_by_type": {},
         }
+
+    def check_trade(self, trade: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+        """Backward-compatible synchronous risk check used by legacy tests."""
+        amount = float(trade.get("amount_kwh", 0.0))
+        action = str(trade.get("action", "")).lower()
+        soc = float(trade.get("battery_soc", 0.5))
+
+        if amount > self.config.limits.max_trade_size:
+            return False, "Position size limit exceeded"
+
+        if self._legacy_max_soc is not None and action == "charge" and soc >= self._legacy_max_soc:
+            return False, "SOC above maximum"
+
+        if self._legacy_min_soc is not None and action == "discharge" and soc <= self._legacy_min_soc:
+            return False, "SOC below minimum"
+
+        return True, None
 
     async def check_action(self, action) -> RiskCheck:
         """Check if a trading action passes risk limits.

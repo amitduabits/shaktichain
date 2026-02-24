@@ -1,8 +1,8 @@
-# SHAKTI-CHAIN AI Team Integration Guide
+# SHAKTI-CHAIN ML Team Integration Guide
 
 ## Overview
 
-This document provides the AI/ML team with all necessary information to integrate with SHAKTI-CHAIN smart contracts for:
+This document provides the ML team with all necessary information to integrate with SHAKTI-CHAIN smart contracts for:
 - Price prediction models
 - Trading agents
 - Demand forecasting
@@ -54,11 +54,11 @@ auction.on('BidPlaced', (roundId, orderId, bidder, quantity, price, event) => {
 
 ---
 
-## Contract Events (AI Consumption)
+## Contract Events (ML Consumption)
 
 ### EnergyAuction Events
 
-| Event | Parameters | Description | AI Use Case |
+| Event | Parameters | Description | ML Use Case |
 |-------|------------|-------------|-------------|
 | `AuctionRoundStarted` | `roundId, startTime, endTime` | New auction round begins | Trigger prediction models |
 | `BidPlaced` | `roundId, orderId, bidder, quantity, maxPrice` | Buyer places bid | Order book analysis |
@@ -79,7 +79,7 @@ const EVENT_TOPICS = {
 
 ### PriceOracle Events
 
-| Event | Parameters | Description | AI Use Case |
+| Event | Parameters | Description | ML Use Case |
 |-------|------------|-------------|-------------|
 | `PriceUpdated` | `price, timestamp` | New IEX price | Feature input |
 | `PriceDeviation` | `oldPrice, newPrice, deviation` | Unusual price move | Anomaly flag |
@@ -87,7 +87,7 @@ const EVENT_TOPICS = {
 
 ### DynamicPricing Events
 
-| Event | Parameters | Description | AI Use Case |
+| Event | Parameters | Description | ML Use Case |
 |-------|------------|-------------|-------------|
 | `DemandMultiplierUpdated` | `oldMultiplier, newMultiplier` | Demand change | Demand modeling |
 | `GridStressDetected` | `frequency, severity` | Grid imbalance | V2G opportunity |
@@ -95,7 +95,7 @@ const EVENT_TOPICS = {
 
 ### ReputationSystem Events
 
-| Event | Parameters | Description | AI Use Case |
+| Event | Parameters | Description | ML Use Case |
 |-------|------------|-------------|-------------|
 | `ReputationUpdated` | `user, oldScore, newScore, reason` | Score change | User behavior |
 | `TierChanged` | `user, oldTier, newTier` | Tier upgrade/downgrade | Segmentation |
@@ -349,19 +349,19 @@ TRAINING_SCHEMA = {
 
 ### Price Oracle Integration
 
-The AI team can provide price predictions to the oracle:
+The ML team can provide price predictions to the oracle:
 
 ```solidity
-// Oracle interface for AI predictions
+// Oracle interface for ML predictions
 interface IAIPriceOracle {
-    // Update price with AI prediction
+    // Update price with ML prediction
     function updatePredictedPrice(
         uint256 predictedPrice,
         uint256 confidence,     // 0-100
         bytes calldata proof    // Optional ZK proof
     ) external;
 
-    // Get AI prediction
+    // Get ML prediction
     function getPredictedPrice() external view returns (
         uint256 price,
         uint256 confidence,
@@ -385,7 +385,7 @@ interface IGridOracle {
 
 ## Mock Contracts for Testing
 
-For AI team testing, use these mock contracts:
+For ML team testing, use these mock contracts:
 
 ### MockPriceFeed.sol
 
@@ -574,3 +574,4 @@ const results = await multicall.aggregate([
 
 *Document Version: 1.0*
 *Last Updated: December 2024*
+

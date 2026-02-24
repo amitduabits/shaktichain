@@ -64,14 +64,29 @@ export function usePolling(apiFunction, interval = 5000) {
   const startPolling = useCallback(async (...args) => {
     setLoading(true);
 
-    // Initial fetch
-    await poll(...args);
+    // Clear any previous interval before starting a new one.
+    if (intervalId) {
+      clearInterval(intervalId);
+      setIntervalId(null);
+    }
 
-    // Set up interval
-    const id = setInterval(() => poll(...args), interval);
+    try {
+      await poll(...args);
+    } catch (_error) {
+      // Keep polling even when the first request fails.
+    } finally {
+      setLoading(false);
+    }
+
+    const id = setInterval(async () => {
+      try {
+        await poll(...args);
+      } catch (_error) {
+        // Polling continues; error state is set by poll().
+      }
+    }, interval);
     setIntervalId(id);
-    setLoading(false);
-  }, [poll, interval]);
+  }, [poll, interval, intervalId]);
 
   const stopPolling = useCallback(() => {
     if (intervalId) {

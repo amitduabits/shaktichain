@@ -1,0 +1,43 @@
+FROM python:3.11-slim AS builder
+
+WORKDIR /build
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt /build/requirements.txt
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r /build/requirements.txt && \
+    pip install --no-cache-dir scikit-learn pandas gunicorn
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --create-home --shell /bin/bash mlservice
+
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+COPY app ./app
+
+RUN mkdir -p /app/logs && chown -R mlservice:mlservice /app
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app:/workspace/ml \
+    ML_SERVICE_WORKERS=2
+
+USER mlservice
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=5 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+CMD ["sh", "-c", "exec /opt/venv/bin/gunicorn -k uvicorn.workers.UvicornWorker app.main:app --bind 0.0.0.0:8000 --workers ${ML_SERVICE_WORKERS:-2}"]

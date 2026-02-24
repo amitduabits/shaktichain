@@ -36,6 +36,7 @@ contract ShaktiToken is ERC20, ERC20Burnable, ERC20Pausable, ERC20Permit, Access
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
     bytes32 public constant BURNER_ROLE = keccak256("BURNER_ROLE");
+    bytes32 public constant ENERGY_SETTLEMENT_ROLE = keccak256("ENERGY_SETTLEMENT_ROLE");
 
     /// @notice Initial supply of 1 billion tokens (with 18 decimals)
     uint256 public constant INITIAL_SUPPLY = 1_000_000_000 * 10**18;
@@ -54,6 +55,8 @@ contract ShaktiToken is ERC20, ERC20Burnable, ERC20Pausable, ERC20Permit, Access
     // ============ Events ============
     event FeesBurned(address indexed burner, uint256 totalAmount, uint256 burnedAmount);
     event TokensMinted(address indexed to, uint256 amount);
+    event EnergyMinted(address indexed operator, address indexed to, uint256 amount, bytes32 indexed deliveryId);
+    event RedeemBurned(address indexed operator, address indexed from, uint256 amount, bytes32 indexed redemptionId);
     event EmergencyPaused(address indexed pauser);
     event EmergencyUnpaused(address indexed pauser);
 
@@ -76,6 +79,7 @@ contract ShaktiToken is ERC20, ERC20Burnable, ERC20Pausable, ERC20Permit, Access
         _grantRole(MINTER_ROLE, defaultAdmin);
         _grantRole(PAUSER_ROLE, defaultAdmin);
         _grantRole(BURNER_ROLE, defaultAdmin);
+        _grantRole(ENERGY_SETTLEMENT_ROLE, defaultAdmin);
 
         // Mint initial supply to the initial holder
         _mint(initialHolder, INITIAL_SUPPLY);
@@ -128,13 +132,51 @@ contract ShaktiToken is ERC20, ERC20Burnable, ERC20Pausable, ERC20Permit, Access
         if (to == address(0)) revert ZeroAddress();
         if (amount == 0) revert ZeroAmount();
 
-        uint256 newTotalSupply = totalSupply() + amount;
-        if (newTotalSupply > MAX_SUPPLY) {
-            revert ExceedsMaxSupply(newTotalSupply, MAX_SUPPLY);
+        _mintCapped(to, amount);
+        emit TokensMinted(to, amount);
+    }
+
+    /**
+     * @notice Mints settlement tokens when energy delivery is verified
+     * @dev Only callable by accounts with ENERGY_SETTLEMENT_ROLE
+     * @param to Recipient address
+     * @param amount Amount to mint
+     * @param deliveryId Off-chain delivery reference hash
+     */
+    function mintForEnergy(
+        address to,
+        uint256 amount,
+        bytes32 deliveryId
+    ) external onlyRole(ENERGY_SETTLEMENT_ROLE) {
+        if (to == address(0)) revert ZeroAddress();
+        if (amount == 0) revert ZeroAmount();
+
+        _mintCapped(to, amount);
+        emit EnergyMinted(_msgSender(), to, amount, deliveryId);
+    }
+
+    /**
+     * @notice Burns tokens when redeemed for fiat/settlement off-ramp
+     * @dev Only callable by accounts with ENERGY_SETTLEMENT_ROLE
+     * @param from Address whose balance is burned
+     * @param amount Amount to burn
+     * @param redemptionId Off-chain redemption reference hash
+     */
+    function burnOnRedeem(
+        address from,
+        uint256 amount,
+        bytes32 redemptionId
+    ) external onlyRole(ENERGY_SETTLEMENT_ROLE) {
+        if (from == address(0)) revert ZeroAddress();
+        if (amount == 0) revert ZeroAmount();
+
+        uint256 available = balanceOf(from);
+        if (available < amount) {
+            revert InsufficientBalance(amount, available);
         }
 
-        _mint(to, amount);
-        emit TokensMinted(to, amount);
+        _burn(from, amount);
+        emit RedeemBurned(_msgSender(), from, amount, redemptionId);
     }
 
     /**
@@ -191,5 +233,14 @@ contract ShaktiToken is ERC20, ERC20Burnable, ERC20Pausable, ERC20Permit, Access
         uint256 value
     ) internal override(ERC20, ERC20Pausable) {
         super._update(from, to, value);
+    }
+
+    function _mintCapped(address to, uint256 amount) internal {
+        uint256 newTotalSupply = totalSupply() + amount;
+        if (newTotalSupply > MAX_SUPPLY) {
+            revert ExceedsMaxSupply(newTotalSupply, MAX_SUPPLY);
+        }
+
+        _mint(to, amount);
     }
 }

@@ -1,9 +1,14 @@
 import { http, createConfig } from 'wagmi';
 import { polygon, polygonAmoy, hardhat } from 'wagmi/chains';
 import { getDefaultConfig } from '@rainbow-me/rainbowkit';
+import { injected } from 'wagmi/connectors';
 
 // Environment-based configuration
-const WALLET_CONNECT_PROJECT_ID = import.meta.env.VITE_WALLET_CONNECT_PROJECT_ID || 'demo-project-id';
+const RAW_WALLET_CONNECT_PROJECT_ID =
+  (import.meta.env.VITE_WALLET_CONNECT_PROJECT_ID ?? '').trim();
+const WALLET_CONNECT_ENABLED =
+  RAW_WALLET_CONNECT_PROJECT_ID.length > 0 &&
+  RAW_WALLET_CONNECT_PROJECT_ID !== 'demo-project-id';
 const POLYGON_RPC_URL = import.meta.env.VITE_POLYGON_RPC_URL || 'https://polygon-rpc.com';
 const POLYGON_AMOY_RPC_URL = import.meta.env.VITE_POLYGON_AMOY_RPC_URL || 'https://rpc-amoy.polygon.technology';
 
@@ -43,19 +48,29 @@ const getChains = () => {
 };
 
 const chains = getChains();
+const transports = {
+  [polygon.id]: http(POLYGON_RPC_URL),
+  [polygonAmoy.id]: http(POLYGON_AMOY_RPC_URL),
+  [hardhat.id]: http('http://127.0.0.1:8545'),
+};
 
 // RainbowKit configuration
-export const config = getDefaultConfig({
-  appName: 'SHAKTI-CHAIN V2G Marketplace',
-  projectId: WALLET_CONNECT_PROJECT_ID,
-  chains,
-  transports: {
-    [polygon.id]: http(POLYGON_RPC_URL),
-    [polygonAmoy.id]: http(POLYGON_AMOY_RPC_URL),
-    [hardhat.id]: http('http://127.0.0.1:8545'),
-  },
-  ssr: false,
-});
+// WalletConnect is enabled only when a real project id is supplied.
+// This avoids noisy 400/403 calls from the default demo id in production.
+export const config = WALLET_CONNECT_ENABLED
+  ? getDefaultConfig({
+      appName: 'SHAKTI-CHAIN V2G Marketplace',
+      projectId: RAW_WALLET_CONNECT_PROJECT_ID,
+      chains,
+      transports,
+      ssr: false,
+    })
+  : createConfig({
+      chains,
+      transports,
+      connectors: [injected()],
+      ssr: false,
+    });
 
 // Export chain IDs for easy reference
 export const CHAIN_IDS = {
@@ -70,6 +85,8 @@ export const getDefaultChain = () => {
   if (isTestnet) return polygonAmoy;
   return polygon;
 };
+
+export const walletConnectEnabled = WALLET_CONNECT_ENABLED;
 
 // Type exports
 export type SupportedChainId = typeof CHAIN_IDS[keyof typeof CHAIN_IDS];

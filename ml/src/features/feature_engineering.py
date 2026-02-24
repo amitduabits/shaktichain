@@ -54,6 +54,7 @@ class FeatureEngineering:
 
         # Scaling
         scale_features: bool = True,
+        base_temperature: float = 18.0,
     ):
         """Initialize feature engineering.
 
@@ -78,12 +79,12 @@ class FeatureEngineering:
 
         self.include_lags = include_lags
         self.lag_hours = lag_hours or [1, 2, 3, 6, 12, 24, 48, 168, 8760]
-        self.lag_columns = lag_columns or ["load_mw", "price_inr_mwh"]
+        self.lag_columns = lag_columns
 
         self.include_rolling = include_rolling
         self.rolling_windows = rolling_windows or [24, 168]
         self.rolling_statistics = rolling_statistics or ["mean", "std", "min", "max"]
-        self.rolling_columns = rolling_columns or ["load_mw"]
+        self.rolling_columns = rolling_columns
 
         self.include_weather = include_weather
         self.include_derived = include_derived
@@ -97,7 +98,26 @@ class FeatureEngineering:
         self.feature_statistics_: Dict[str, Any] = {}
 
         # Base temperature for degree days (comfortable temperature)
-        self.base_temperature = 18.0  # °C
+        self.base_temperature = float(base_temperature)  # °C
+
+    @staticmethod
+    def _auto_select_columns(
+        df: pd.DataFrame,
+        configured_columns: Optional[List[str]],
+        patterns: List[str],
+    ) -> List[str]:
+        """Select feature columns either from config or by pattern matching."""
+        if configured_columns:
+            return configured_columns
+
+        selected: List[str] = []
+        for col in df.columns:
+            if not pd.api.types.is_numeric_dtype(df[col]):
+                continue
+            col_lower = col.lower()
+            if any(pattern in col_lower for pattern in patterns):
+                selected.append(col)
+        return selected
 
     def _create_temporal_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """Create temporal features.
@@ -177,7 +197,13 @@ class FeatureEngineering:
 
         df = df.copy()
 
-        for column in self.lag_columns:
+        lag_columns = self._auto_select_columns(
+            df,
+            self.lag_columns,
+            patterns=["load_mw", "price_inr_mwh", "price"],
+        )
+
+        for column in lag_columns:
             if column not in df.columns:
                 logger.warning(f"Column {column} not found for lag features")
                 continue
@@ -186,7 +212,7 @@ class FeatureEngineering:
                 col_name = f"{column}_lag_{lag_hours}h"
                 df[col_name] = df[column].shift(lag_hours)
 
-        logger.info(f"Created lag features for {len(self.lag_columns)} columns")
+        logger.info(f"Created lag features for {len(lag_columns)} columns")
         return df
 
     def _create_rolling_features(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -203,7 +229,13 @@ class FeatureEngineering:
 
         df = df.copy()
 
-        for column in self.rolling_columns:
+        rolling_columns = self._auto_select_columns(
+            df,
+            self.rolling_columns,
+            patterns=["load_mw"],
+        )
+
+        for column in rolling_columns:
             if column not in df.columns:
                 logger.warning(f"Column {column} not found for rolling features")
                 continue
@@ -223,7 +255,7 @@ class FeatureEngineering:
                     elif stat == "median":
                         df[col_name] = df[column].rolling(window=window, min_periods=1).median()
 
-        logger.info(f"Created rolling features for {len(self.rolling_columns)} columns")
+        logger.info(f"Created rolling features for {len(rolling_columns)} columns")
         return df
 
     def _create_weather_features(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -487,7 +519,7 @@ class FeatureEngineering:
         if scale and self.scale_features and self.scalers_:
             for col, scaler in self.scalers_.items():
                 if col in df_transformed.columns:
-                    df_transformed[col] = scaler.transform(df_transformed[[col]])
+                    df_transformed[col] = scaler.transform(df_transformed[[col]]).ravel()
 
         logger.info(f"Transformed to {len(df_transformed.columns)} features")
         return df_transformed

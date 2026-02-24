@@ -808,7 +808,7 @@ def _mock_trading_explanation(request, request_id, start_time):
         confidence=0.75,
         reasons=[
             ActionReasonResponse(
-                reason="Current price (₹4.50/kWh) is favorable for selling",
+                reason="Current price (INR 4.50/kWh) is favorable for selling",
                 factor="spot_price",
                 value=4.5,
                 threshold=4.0,
@@ -824,7 +824,7 @@ def _mock_trading_explanation(request, request_id, start_time):
                 direction="positive",
             ),
         ],
-        text_explanation="Decision: SELL 50 kWh @ ₹4.50/kWh\nConfidence: 75%\n\nKey Factors:\n  1. ✓ Current price favorable for selling\n  2. ✓ Battery SOC above threshold",
+        text_explanation="Decision: SELL 50 kWh @ INR 4.50/kWh\nConfidence: 75%\n\nKey Factors:\n  1. ✓ Current price favorable for selling\n  2. ✓ Battery SOC above threshold",
         alternative_actions=[
             AlternativeActionResponse(
                 action="HOLD",
@@ -869,3 +869,4 @@ def _mock_model_summary(model_type: str, model_version: str):
         recent_mae=5.5,
         last_updated=datetime.now(),
     )
+

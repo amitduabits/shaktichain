@@ -1,0 +1,17 @@
+FROM node:22-bookworm-slim
+
+WORKDIR /workspace/subgraph
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    make \
+    g++ \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY package*.json ./
+RUN npm install
+
+COPY . .
+
+CMD ["sh", "-lc", "npm run codegen && npm run build && tail -f /dev/null"]

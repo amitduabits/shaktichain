@@ -345,29 +345,38 @@ describe("Security: Front-Running Prevention", function () {
   });
 
   describe("Commit-Reveal Considerations", function () {
-    it("Auction uses sealed-bid equivalent (time-bound submission)", async function () {
-      /**
-       * While not a cryptographic commit-reveal scheme,
-       * the time-bound auction window provides similar protection:
-       * - Orders can be submitted during window
-       * - Clearing happens after window closes
-       * - No opportunity to front-run the clearing
-       */
-
+    it("Auction enforces cryptographic commit/reveal validation", async function () {
       await loadFixture(deployContractsFixture);
       await energyAuction.createAuctionRound(AUCTION_DURATION);
 
-      // Submit orders during window
-      await energyAuction.connect(victim).submitBid(ORDER_QUANTITY, ethers.parseEther("0.006"));
+      const revealWindow = 600;
+      const nonce = ethers.id("commit-reveal-front-running");
+      const price = ethers.parseEther("0.006");
+      const commitment = await energyAuction.computeCommitment(
+        1,
+        victim.address,
+        ORDER_QUANTITY,
+        price,
+        true,
+        nonce
+      );
 
-      // Window closes
+      await energyAuction.connect(victim).commitOrder(1, commitment, revealWindow);
+
       await ethers.provider.send("evm_increaseTime", [AUCTION_DURATION + 1]);
       await ethers.provider.send("evm_mine", []);
+      await energyAuction.closeAuction(1);
 
-      // Cannot submit after close
+      // Wrong nonce should fail commitment validation.
       await expect(
-        energyAuction.connect(frontrunner).submitBid(ORDER_QUANTITY, ethers.parseEther("0.007"))
-      ).to.be.reverted;
+        energyAuction
+          .connect(victim)
+          .revealOrder(1, 0, ORDER_QUANTITY, price, true, ethers.id("invalid"))
+      ).to.be.revertedWithCustomError(energyAuction, "InvalidRevealData");
+
+      await expect(
+        energyAuction.connect(victim).revealOrder(1, 0, ORDER_QUANTITY, price, true, nonce)
+      ).to.emit(energyAuction, "OrderRevealed");
     });
   });
 

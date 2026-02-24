@@ -480,7 +480,8 @@ If you encounter issues not covered here:
 ## Additional Resources
 
 - **PyTorch Documentation**: https://pytorch.org/docs/
-- **PyTorch Lightning**: https://lightning.ai/docs/pytorch/
+- **PyTorch Lightning**: Official documentation
 - **MLflow Documentation**: https://mlflow.org/docs/
 - **Hydra Documentation**: https://hydra.cc/docs/
 - **DVC Documentation**: https://dvc.org/doc
+

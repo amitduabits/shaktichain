@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, act, waitFor } from '@testing-library/react';
+import { renderHook, act } from '@testing-library/react';
 import { useApi, usePolling } from '../../hooks/useApi';
 
 describe('useApi', () => {
@@ -89,7 +89,7 @@ describe('useApi', () => {
       await act(async () => {
         try {
           await result.current.execute();
-        } catch (e) {
+        } catch (_error) {
           // Expected to throw
         }
       });
@@ -113,7 +113,7 @@ describe('useApi', () => {
       await act(async () => {
         try {
           await result.current.execute();
-        } catch (e) {
+        } catch (_error) {
           // Expected to throw
         }
       });
@@ -133,7 +133,9 @@ describe('useApi', () => {
       await act(async () => {
         try {
           await result.current.execute();
-        } catch (e) {}
+        } catch (_error) {
+          // Expected to throw
+        }
       });
 
       expect(result.current.error).toBe('First error');
@@ -188,7 +190,9 @@ describe('useApi', () => {
       await act(async () => {
         try {
           await result.current.execute();
-        } catch (e) {}
+        } catch (_error) {
+          // Expected to throw
+        }
       });
 
       expect(result.current.error).not.toBeNull();
@@ -415,7 +419,7 @@ describe('usePolling', () => {
       await act(async () => {
         try {
           await result.current.startPolling();
-        } catch (e) {
+        } catch (_error) {
           // Expected
         }
       });
@@ -434,7 +438,9 @@ describe('usePolling', () => {
       await act(async () => {
         try {
           await result.current.startPolling();
-        } catch (e) {}
+        } catch (_error) {
+          // Expected to throw
+        }
       });
 
       expect(result.current.error).toBe('First error');

@@ -4,9 +4,24 @@ import torch
 import pytorch_lightning as pl
 from typing import Dict, Any, Optional, List
 import logging
-import mlflow
 
-from ..models.temporal_fusion_transformer import TemporalFusionTransformer
+try:
+    import mlflow
+except ImportError:
+    class _MlflowStub:
+        @staticmethod
+        def log_metric(*args, **kwargs):
+            return None
+
+    mlflow = _MlflowStub()
+
+try:
+    from ..models.temporal_fusion_transformer import TemporalFusionTransformer
+except ImportError:
+    try:
+        from models.temporal_fusion_transformer import TemporalFusionTransformer
+    except ImportError:
+        TemporalFusionTransformer = None
 from .quantile_loss import QuantileLoss, NormalizedQuantileLoss
 
 logger = logging.getLogger(__name__)
@@ -44,6 +59,11 @@ class TFTLightningModule(pl.LightningModule):
         log_to_mlflow: bool = True,
     ):
         super().__init__()
+        if TemporalFusionTransformer is None:
+            raise ImportError(
+                "TemporalFusionTransformer is unavailable. "
+                "Ensure the model module is installed before instantiating TFTLightningModule."
+            )
         self.save_hyperparameters()
 
         # Extract model parameters

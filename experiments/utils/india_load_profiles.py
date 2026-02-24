@@ -274,7 +274,8 @@ class IndiaLoadProfiles:
         """Calculate base demand pattern."""
         # Diurnal pattern
         phase = 2 * np.pi * (hour - 15) / 24
-        diurnal = 0.5 * (1 - np.cos(phase))
+        # Max demand near 15:00, minimum in early night/morning.
+        diurnal = 0.5 * (1 + np.cos(phase))
 
         # Scale between 0.6 and 1.4
         multiplier = 0.6 + 0.8 * diurnal

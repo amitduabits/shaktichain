@@ -1,0 +1,191 @@
+{
+  "generated_at": "2026-02-24T08:21:28.440242+00:00",
+  "mode": "test",
+  "claims": [
+    {
+      "claim_id": "EXP-REPRO-001",
+      "description": "Same seed reproduces identical aggregate metrics.",
+      "passed": true,
+      "evidence": {
+        "seed": 42,
+        "run_a": [
+          6.033735036480308,
+          0.8998931148966035
+        ],
+        "run_b": [
+          6.033735036480308,
+          0.8998931148966035
+        ]
+      }
+    },
+    {
+      "claim_id": "EXP-INVAR-001",
+      "description": "Changing random seed changes aggregate outcomes.",
+      "passed": true,
+      "evidence": {
+        "seed_a": 42,
+        "seed_b": 314,
+        "run_a": [
+          6.033735036480308,
+          0.8998931148966035
+        ],
+        "run_b": [
+          5.991252409271699,
+          0.9000987392370539
+        ]
+      }
+    }
+  ],
+  "runs": {
+    "same_seed_a": {
+      "experiment_id": "claim_matrix_test_seed42_a_20260224_082128_561db5b2",
+      "config": {
+        "name": "claim_matrix_test_seed42_a",
+        "run_mode": "quick",
+        "scenario": "normal_demand",
+        "agent_distribution": "default",
+        "baseline": null,
+        "random_seed": 42,
+        "num_runs": null,
+        "num_agents": null,
+        "duration_hours": null,
+        "clearing_interval_seconds": null,
+        "custom_params": {}
+      },
+      "status": "completed",
+      "start_time": "2026-02-24T08:21:28.370640",
+      "end_time": "2026-02-24T08:21:28.373952",
+      "total_periods": 180,
+      "completed_periods": 180,
+      "metrics": {
+        "num_runs": 3,
+        "total_periods": 180,
+        "clearing_price": {
+          "mean": 6.033735036480308,
+          "std": 1.1678625057670606,
+          "min": 4.009357562503113,
+          "max": 7.983325500117482
+        },
+        "clearing_quantity": {
+          "mean": 55.26325400296793,
+          "std": 26.237043100223524
+        },
+        "efficiency": {
+          "mean": 0.8998931148966035,
+          "std": 0.05842796446040883
+        },
+        "total_welfare": {
+          "buyer_surplus_mean": 50.53697542574083,
+          "seller_surplus_mean": 51.29331456075648,
+          "total_surplus_mean": 101.8302899864973
+        }
+      },
+      "errors": []
+    },
+    "same_seed_b": {
+      "experiment_id": "claim_matrix_test_seed42_b_20260224_082128_659bb4cf",
+      "config": {
+        "name": "claim_matrix_test_seed42_b",
+        "run_mode": "quick",
+        "scenario": "normal_demand",
+        "agent_distribution": "default",
+        "baseline": null,
+        "random_seed": 42,
+        "num_runs": null,
+        "num_agents": null,
+        "duration_hours": null,
+        "clearing_interval_seconds": null,
+        "custom_params": {}
+      },
+      "status": "completed",
+      "start_time": "2026-02-24T08:21:28.401538",
+      "end_time": "2026-02-24T08:21:28.403594",
+      "total_periods": 180,
+      "completed_periods": 180,
+      "metrics": {
+        "num_runs": 3,
+        "total_periods": 180,
+        "clearing_price": {
+          "mean": 6.033735036480308,
+          "std": 1.1678625057670606,
+          "min": 4.009357562503113,
+          "max": 7.983325500117482
+        },
+        "clearing_quantity": {
+          "mean": 55.26325400296793,
+          "std": 26.237043100223524
+        },
+        "efficiency": {
+          "mean": 0.8998931148966035,
+          "std": 0.05842796446040883
+        },
+        "total_welfare": {
+          "buyer_surplus_mean": 50.53697542574083,
+          "seller_surplus_mean": 51.29331456075648,
+          "total_surplus_mean": 101.8302899864973
+        }
+      },
+      "errors": []
+    },
+    "different_seed": {
+      "experiment_id": "claim_matrix_test_seed314_20260224_082128_e5199119",
+      "config": {
+        "name": "claim_matrix_test_seed314",
+        "run_mode": "quick",
+        "scenario": "normal_demand",
+        "agent_distribution": "default",
+        "baseline": null,
+        "random_seed": 314,
+        "num_runs": null,
+        "num_agents": null,
+        "duration_hours": null,
+        "clearing_interval_seconds": null,
+        "custom_params": {}
+      },
+      "status": "completed",
+      "start_time": "2026-02-24T08:21:28.432608",
+      "end_time": "2026-02-24T08:21:28.435725",
+      "total_periods": 180,
+      "completed_periods": 180,
+      "metrics": {
+        "num_runs": 3,
+        "total_periods": 180,
+        "clearing_price": {
+          "mean": 5.991252409271699,
+          "std": 1.1731418012665253,
+          "min": 4.004865070399314,
+          "max": 7.984592895137862
+        },
+        "clearing_quantity": {
+          "mean": 52.506329181616216,
+          "std": 26.989002342817756
+        },
+        "efficiency": {
+          "mean": 0.9000987392370539,
+          "std": 0.05764540809431852
+        },
+        "total_welfare": {
+          "buyer_surplus_mean": 48.759647449990794,
+          "seller_surplus_mean": 53.961841079784314,
+          "total_surplus_mean": 102.72148852977512
+        }
+      },
+      "errors": []
+    }
+  },
+  "provenance": {
+    "git_commit": null,
+    "container_image_digest": null,
+    "config_hashes": {
+      "same_seed_a": "e2501a2c3615abc4",
+      "same_seed_b": "11bbc02229a6fef9",
+      "different_seed": "a6970222e41bab87"
+    },
+    "seeds": {
+      "same_seed_a": 42,
+      "same_seed_b": 42,
+      "different_seed": 314
+    },
+    "timestamp": "2026-02-24T08:21:28.440242+00:00"
+  }
+}

@@ -1,32 +1,93 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Dashboard from './components/Dashboard';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { Web3Provider, useAppMode } from './providers/Web3Provider';
+import { Web3Provider } from './providers/Web3Provider';
 import { ConnectWallet, TransactionStatus } from './components/web3';
 import { getHealth } from './services/api';
 import './App.css';
 
 const APP_VERSION = '1.0.0';
+const AUTH_ROUTES = new Set(['/login', '/register']);
+
+function normalizePath(pathname) {
+  if (pathname === '/dashboard') {
+    return '/dashboard';
+  }
+  if (pathname === '/register') {
+    return '/register';
+  }
+  if (pathname === '/login') {
+    return '/login';
+  }
+  return '/login';
+}
 
 function AppContent() {
   const { user, loading, isAuthenticated, logout } = useAuth();
   const [apiStatus, setApiStatus] = useState('checking');
-  const [authView, setAuthView] = useState('login');
+  const [currentPath, setCurrentPath] = useState(() =>
+    normalizePath(window.location.pathname)
+  );
+
+  const navigate = useCallback((path, replace = false) => {
+    if (window.location.pathname !== path) {
+      if (replace) {
+        window.history.replaceState({}, '', path);
+      } else {
+        window.history.pushState({}, '', path);
+      }
+    }
+    setCurrentPath(path);
+  }, []);
 
   useEffect(() => {
     const checkHealth = async () => {
       try {
         await getHealth();
         setApiStatus('connected');
-      } catch (err) {
+      } catch (_error) {
         setApiStatus('disconnected');
       }
     };
 
     checkHealth();
   }, []);
+
+  useEffect(() => {
+    const onPopState = () => {
+      setCurrentPath(normalizePath(window.location.pathname));
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
+  useEffect(() => {
+    if (loading) {
+      return;
+    }
+
+    if (!isAuthenticated) {
+      if (!AUTH_ROUTES.has(currentPath)) {
+        if (window.location.pathname !== '/login') {
+          window.history.replaceState({}, '', '/login');
+        }
+      }
+      return;
+    }
+
+    if (AUTH_ROUTES.has(currentPath)) {
+      if (window.location.pathname !== '/dashboard') {
+        window.history.replaceState({}, '', '/dashboard');
+      }
+    }
+  }, [currentPath, isAuthenticated, loading]);
+
+  const handleLogout = useCallback(() => {
+    logout();
+    navigate('/login', true);
+  }, [logout, navigate]);
 
   if (loading) {
     return (
@@ -40,10 +101,10 @@ function AppContent() {
   }
 
   if (!isAuthenticated) {
-    if (authView === 'login') {
-      return <Login onSwitchToRegister={() => setAuthView('register')} />;
+    if (currentPath === '/register') {
+      return <Register onSwitchToLogin={() => navigate('/login')} />;
     }
-    return <Register onSwitchToLogin={() => setAuthView('login')} />;
+    return <Login onSwitchToRegister={() => navigate('/register')} />;
   }
 
   return (
@@ -65,8 +126,8 @@ function AppContent() {
             </div>
             <div className="user-menu">
               <span className="user-email">{user?.email}</span>
-              <button className="logout-button" onClick={logout}>
-                Sign Out
+              <button className="logout-button" onClick={handleLogout}>
+                Logout
               </button>
             </div>
           </div>

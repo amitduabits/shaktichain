@@ -32,7 +32,11 @@ class TestFullSimulationFlow:
     @pytest.fixture(autouse=True)
     def setup(self):
         """Set up test environment."""
-        from backend.core.database import Database
+        from backend.core.database import Database, reset_database
+
+        os.environ["V2G_DB_PATH"] = TEST_DB_PATH
+
+        reset_database()
 
         self.db = Database(TEST_DB_PATH)
         self.db.init_db()
@@ -40,6 +44,7 @@ class TestFullSimulationFlow:
         yield
 
         self.db.close()
+        reset_database()
         if os.path.exists(TEST_DB_PATH):
             os.unlink(TEST_DB_PATH)
 
@@ -193,7 +198,11 @@ class TestDatabaseAPIFlow:
     @pytest.fixture(autouse=True)
     def setup(self):
         """Set up test client."""
-        from backend.core.database import Database
+        from backend.core.database import Database, reset_database
+
+        os.environ["V2G_DB_PATH"] = TEST_DB_PATH
+
+        reset_database()
 
         self.db = Database(TEST_DB_PATH)
         self.db.init_db()
@@ -201,6 +210,7 @@ class TestDatabaseAPIFlow:
         yield
 
         self.db.close()
+        reset_database()
         if os.path.exists(TEST_DB_PATH):
             os.unlink(TEST_DB_PATH)
 
@@ -209,7 +219,8 @@ class TestDatabaseAPIFlow:
         """Create test client."""
         from backend.api.main import app
         from fastapi.testclient import TestClient
-        return TestClient(app)
+        with TestClient(app) as test_client:
+            yield test_client
 
     @pytest.fixture
     def auth_headers(self, client):
@@ -301,7 +312,11 @@ class TestConcurrentSimulations:
     @pytest.fixture(autouse=True)
     def setup(self):
         """Set up test environment."""
-        from backend.core.database import Database
+        from backend.core.database import Database, reset_database
+
+        os.environ["V2G_DB_PATH"] = TEST_DB_PATH
+
+        reset_database()
 
         self.db = Database(TEST_DB_PATH)
         self.db.init_db()
@@ -309,6 +324,7 @@ class TestConcurrentSimulations:
         yield
 
         self.db.close()
+        reset_database()
         if os.path.exists(TEST_DB_PATH):
             os.unlink(TEST_DB_PATH)
 

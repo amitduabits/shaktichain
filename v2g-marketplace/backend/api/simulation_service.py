@@ -6,6 +6,9 @@ Manages long-running simulations in separate threads.
 
 import threading
 import uuid
+import json
+import os
+import subprocess
 from datetime import datetime
 from typing import Dict, Optional
 from dataclasses import asdict
@@ -14,7 +17,7 @@ from pathlib import Path
 
 # Add project root to path for imports (works on both Windows and Unix)
 _backend_dir = Path(__file__).parent.parent
-_project_root = _backend_dir.parent
+_project_root = _backend_dir
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 if str(_backend_dir) not in sys.path:
@@ -38,6 +41,47 @@ class SimulationJob:
         self.error: Optional[str] = None
         self.results: Optional[dict] = None
         self.thread: Optional[threading.Thread] = None
+
+    def _resolve_git_commit(self) -> Optional[str]:
+        """Best-effort retrieval of current git commit hash."""
+        try:
+            commit = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"],
+                cwd=str(_project_root),
+                stderr=subprocess.DEVNULL,
+                text=True,
+                timeout=5,
+            ).strip()
+            return commit or None
+        except Exception:
+            return None
+
+    def _write_provenance_artifact(self) -> None:
+        """Write machine-readable evidence for this simulation run."""
+        if self.results is None:
+            return
+
+        artifacts_dir = Path(
+            os.getenv("CLAIM_ARTIFACTS_DIR", str(_project_root / "artifacts" / "claim_matrix"))
+        )
+        artifacts_dir.mkdir(parents=True, exist_ok=True)
+
+        payload = {
+            "job_id": self.job_id,
+            "created_at": datetime.utcnow().isoformat() + "Z",
+            "seed": self.config.random_seed,
+            "config": asdict(self.config),
+            "results": self.results,
+            "provenance": {
+                "git_commit": self._resolve_git_commit(),
+                "container_image_digest": os.getenv("CONTAINER_IMAGE_DIGEST"),
+                "config_hash": str(hash(json.dumps(asdict(self.config), sort_keys=True, default=str))),
+                "timestamp_utc": datetime.utcnow().isoformat() + "Z",
+            },
+        }
+
+        with open(artifacts_dir / f"simulation_{self.job_id}.json", "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2, default=str)
 
     def run(self):
         """Execute the simulation in background."""
@@ -108,6 +152,7 @@ class SimulationJob:
 
             self.status = "completed"
             self.progress = 100.0
+            self._write_provenance_artifact()
 
         except Exception as e:
             self.status = "failed"
@@ -235,6 +280,6 @@ _simulation_service: Optional[SimulationService] = None
 def get_simulation_service(db: Database) -> SimulationService:
     """Get or create the simulation service singleton."""
     global _simulation_service
-    if _simulation_service is None:
+    if _simulation_service is None or _simulation_service.db is not db:
         _simulation_service = SimulationService(db)
     return _simulation_service

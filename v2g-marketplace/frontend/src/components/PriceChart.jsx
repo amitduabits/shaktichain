@@ -14,7 +14,6 @@ import { getPriceHistory } from '../services/api';
 function PriceChart() {
   const [priceData, setPriceData] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
 
   useEffect(() => {
     const fetchPriceHistory = async () => {
@@ -44,7 +43,6 @@ function PriceChart() {
         // Fallback to sample data on error
         const sampleData = generateSampleData();
         setPriceData(sampleData);
-        setError('Using sample data');
         setLoading(false);
       }
     };
@@ -73,7 +71,7 @@ function PriceChart() {
     return () => clearInterval(interval);
   }, []);
 
-  const formatPrice = (value) => `₹${value.toFixed(2)}`;
+  const formatPrice = (value) => `INR ${value.toFixed(2)}`;
   const formatDemand = (value) => `${value.toFixed(0)} kW`;
 
   return (
@@ -116,7 +114,7 @@ function PriceChart() {
               }}
               labelStyle={{ color: '#F3F4F6' }}
               formatter={(value, name) => {
-                if (name === 'price') return [`₹${value.toFixed(2)}/kWh`, 'Price'];
+                if (name === 'price') return [`INR ${value.toFixed(2)}/kWh`, 'Price'];
                 return [`${value.toFixed(1)} kW`, 'Demand'];
               }}
             />
@@ -128,7 +126,7 @@ function PriceChart() {
               stroke="#10B981"
               strokeWidth={2}
               dot={false}
-              name="Price (₹/kWh)"
+              name="Price (INR/kWh)"
             />
             <Line
               yAxisId="right"

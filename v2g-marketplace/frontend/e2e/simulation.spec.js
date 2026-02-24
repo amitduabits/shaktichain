@@ -21,15 +21,15 @@ test.describe('Simulation', () => {
 
   test.describe('Dashboard Display', () => {
     test('displays market overview', async ({ page }) => {
-      await expect(page.getByText(/energy market overview/i)).toBeVisible();
+      await expect(page.getByRole('heading', { name: /energy market overview/i })).toBeVisible();
     });
 
     test('displays price chart section', async ({ page }) => {
-      await expect(page.getByText(/price history/i)).toBeVisible();
+      await expect(page.getByRole('heading', { name: /price history/i })).toBeVisible();
     });
 
     test('displays simulation panel', async ({ page }) => {
-      await expect(page.getByText(/run simulation/i)).toBeVisible();
+      await expect(page.getByRole('button', { name: /run simulation/i })).toBeVisible();
     });
 
     test('displays market stats', async ({ page }) => {
@@ -83,16 +83,14 @@ test.describe('Simulation', () => {
       await runButton.click();
 
       // Should show running state or progress
-      await expect(
-        page.getByText(/running|progress|simulating/i)
-      ).toBeVisible({ timeout: 10000 });
+      await expect(page.getByRole('button', { name: /running/i })).toBeVisible({ timeout: 10000 });
     });
 
     test('disables controls while running', async ({ page }) => {
       await page.getByRole('button', { name: /run simulation/i }).click();
 
       // Wait for running state
-      await expect(page.getByText(/running/i)).toBeVisible({ timeout: 5000 });
+      await expect(page.getByRole('button', { name: /running/i })).toBeVisible({ timeout: 5000 });
 
       // Controls should be disabled
       await expect(page.getByLabel(/number of agents/i)).toBeDisabled();
@@ -103,14 +101,13 @@ test.describe('Simulation', () => {
       await page.getByRole('button', { name: /run simulation/i }).click();
 
       // Should show progress indicator
-      await expect(
-        page.getByText(/progress|%|day.*of/i)
-      ).toBeVisible({ timeout: 10000 });
+      await expect(page.getByText('Simulation Progress')).toBeVisible({ timeout: 10000 });
+      await expect(page.getByText(/simulating day \d+ of \d+/i)).toBeVisible({ timeout: 10000 });
     });
   });
 
   test.describe('Simulation Results', () => {
-    test.skip('displays results when simulation completes', async ({ page }) => {
+    test('displays results when simulation completes', async ({ page }) => {
       // Configure a short simulation
       await page.getByLabel(/simulation duration/i).selectOption('1');
 
@@ -118,39 +115,37 @@ test.describe('Simulation', () => {
       await page.getByRole('button', { name: /run simulation/i }).click();
 
       // Wait for completion (with longer timeout)
-      await expect(
-        page.getByText(/simulation complete|results/i)
-      ).toBeVisible({ timeout: 120000 });
+      await expect(page.getByRole('heading', { name: /simulation complete/i }))
+        .toBeVisible({ timeout: 120000 });
 
       // Should show result metrics
-      await expect(page.getByText(/total energy traded/i)).toBeVisible();
-      await expect(page.getByText(/average price/i)).toBeVisible();
+      const resultsPanel = page.locator('.simulation-results');
+      await expect(resultsPanel.getByText(/total energy traded/i)).toBeVisible();
+      await expect(resultsPanel.getByText(/average price/i)).toBeVisible();
     });
 
-    test.skip('allows downloading results', async ({ page }) => {
+    test('allows downloading results', async ({ page }) => {
       // Configure and run short simulation
       await page.getByLabel(/simulation duration/i).selectOption('1');
       await page.getByRole('button', { name: /run simulation/i }).click();
 
       // Wait for completion
-      await expect(
-        page.getByText(/simulation complete/i)
-      ).toBeVisible({ timeout: 120000 });
+      await expect(page.getByRole('heading', { name: /simulation complete/i }))
+        .toBeVisible({ timeout: 120000 });
 
       // Download button should be visible
       const downloadBtn = page.getByRole('button', { name: /download csv/i });
       await expect(downloadBtn).toBeVisible();
     });
 
-    test.skip('allows running simulation again', async ({ page }) => {
+    test('allows running simulation again', async ({ page }) => {
       // Run simulation
       await page.getByLabel(/simulation duration/i).selectOption('1');
       await page.getByRole('button', { name: /run simulation/i }).click();
 
       // Wait for completion
-      await expect(
-        page.getByText(/simulation complete/i)
-      ).toBeVisible({ timeout: 120000 });
+      await expect(page.getByRole('heading', { name: /simulation complete/i }))
+        .toBeVisible({ timeout: 120000 });
 
       // Run again button should be visible
       const runAgainBtn = page.getByRole('button', { name: /run again/i });
@@ -180,14 +175,12 @@ test.describe('Price Chart', () => {
 
   test('displays price chart area', async ({ page }) => {
     // Should have a chart container
-    await expect(page.getByText(/price history/i)).toBeVisible();
+    await expect(page.getByRole('heading', { name: /price history/i })).toBeVisible();
   });
 
   test('updates price display', async ({ page }) => {
     // Should show current price
-    await expect(
-      page.getByText(/current price|loading/i)
-    ).toBeVisible();
+    await expect(page.locator('.price-badge')).toBeVisible();
   });
 });
 

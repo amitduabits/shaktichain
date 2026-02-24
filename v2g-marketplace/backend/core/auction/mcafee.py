@@ -25,7 +25,7 @@ Reference:
 """
 
 from dataclasses import dataclass
-from typing import List, Tuple, Optional
+from typing import List, Optional
 
 
 @dataclass
@@ -120,14 +120,14 @@ class McAfeeAuction:
         else:
             self._sell_bids.append(bid)
 
-    def get_bids(self) -> Tuple[List[Bid], List[Bid]]:
+    def get_bids(self) -> List[Bid]:
         """
         Get all current bids.
 
         Returns:
-            Tuple of (buy_bids, sell_bids)
+            Flat list of all bids (buyers then sellers).
         """
-        return self._buy_bids.copy(), self._sell_bids.copy()
+        return self._buy_bids.copy() + self._sell_bids.copy()
 
     def clear_market(self) -> ClearingResult:
         """

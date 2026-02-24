@@ -21,6 +21,22 @@ vi.mock('../../components/SimulationPanel', () => ({
   default: () => <div data-testid="simulation-panel">Simulation Panel Mock</div>,
 }));
 
+vi.mock('../../providers/Web3Provider', () => ({
+  useOptionalAppMode: () => ({
+    mode: 'simulation',
+    isLiveMode: false,
+    isSimulationMode: true,
+    setMode: vi.fn(),
+    toggleMode: vi.fn(),
+  }),
+}));
+
+vi.mock('../../components/web3', () => ({
+  TokenBalance: () => <div data-testid="token-balance">Token Balance Mock</div>,
+  StakingPanel: () => <div data-testid="staking-panel">Staking Panel Mock</div>,
+  BidForm: () => <div data-testid="bid-form">Bid Form Mock</div>,
+}));
+
 describe('Dashboard', () => {
   beforeEach(() => {
     vi.clearAllMocks();

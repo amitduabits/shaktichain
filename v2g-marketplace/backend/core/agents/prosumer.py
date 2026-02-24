@@ -6,7 +6,7 @@ Prosumers can act as both buyers (charging) and sellers (discharging to grid).
 """
 
 from dataclasses import dataclass, field
-from typing import Literal, Tuple
+from typing import Literal, Optional, Tuple
 import random
 
 
@@ -23,6 +23,11 @@ class Bid:
     quantity: float  # kWh
     timestamp: float = 0.0
 
+    @property
+    def is_buy(self) -> bool:
+        """Backward-compatible alias used by auction integration tests."""
+        return self.role == "buyer"
+
 
 @dataclass
 class Prosumer:
@@ -36,6 +41,7 @@ class Prosumer:
     agent_type: AgentType
     battery_capacity: float = 50.0  # kWh
     current_soc: float = 0.5  # 0-1, state of charge
+    initial_soc: Optional[float] = None  # Backward-compatible alias for current_soc
     location: Tuple[float, float] = (0.0, 0.0)  # (lat, lng)
     true_valuation: float = 6.0  # INR/kWh - willingness to pay/accept
 
@@ -48,6 +54,8 @@ class Prosumer:
 
     def __post_init__(self):
         """Validate inputs after initialization."""
+        if self.initial_soc is not None:
+            self.current_soc = self.initial_soc
         if not 0 <= self.current_soc <= 1:
             raise ValueError(f"current_soc must be between 0 and 1, got {self.current_soc}")
         if self.battery_capacity <= 0:
@@ -99,7 +107,7 @@ class Prosumer:
 
         return "buyer"
 
-    def generate_bid(self, current_price: float, hour: int = 12) -> Bid:
+    def generate_bid(self, current_price: Optional[float] = None, hour: int = 12) -> Optional[Bid]:
         """
         Generate a bid based on true valuation with small noise.
 
@@ -111,9 +119,17 @@ class Prosumer:
             hour: Current hour for role decision
 
         Returns:
-            Bid object with price and quantity
+            Bid object with price and quantity, or None if no tradable quantity exists
         """
+        if current_price is None:
+            current_price = self.true_valuation
+
         role = self.decide_role(hour)
+
+        # Very low-medium SOC participants may still buy during peak windows.
+        # This avoids unrealistic all-seller snapshots in integration runs.
+        if role == "seller" and hour in self.peak_hours and self.current_soc <= 0.4:
+            role = "buyer"
 
         # Add noise to true valuation (±5%)
         noise = random.uniform(-0.05, 0.05)
@@ -129,8 +145,10 @@ class Prosumer:
             bid_price = max(base_price, current_price * 0.9)
             quantity = min(self.available_energy, self.battery_capacity * 0.3)
 
-        # Ensure minimum quantity
+        # Ensure minimum tradable quantity and skip non-tradable bids.
         quantity = max(quantity, 1.0) if quantity > 0.5 else 0.0
+        if quantity <= 0.0:
+            return None
 
         return Bid(
             agent_id=self.agent_id,
@@ -139,7 +157,13 @@ class Prosumer:
             quantity=round(quantity, 2)
         )
 
-    def update_soc(self, quantity: float, is_buying: bool) -> None:
+    def update_soc(
+        self,
+        quantity: float = 0.0,
+        is_buying: bool = True,
+        *,
+        energy_delta: Optional[float] = None,
+    ) -> None:
         """
         Update battery state of charge after a trade.
 
@@ -147,6 +171,11 @@ class Prosumer:
             quantity: Energy traded (kWh)
             is_buying: True if buying (charging), False if selling (discharging)
         """
+        if energy_delta is not None:
+            soc_change = energy_delta / self.battery_capacity
+            self.current_soc = min(1.0, max(0.0, self.current_soc + soc_change))
+            return
+
         if quantity < 0:
             raise ValueError(f"quantity must be non-negative, got {quantity}")
 

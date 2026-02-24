@@ -1,15 +1,12 @@
-import { BigInt, Address, Bytes } from "@graphprotocol/graph-ts";
+import { Address } from "@graphprotocol/graph-ts";
 import {
   Transfer as TransferEvent,
   Approval as ApprovalEvent,
   FeesBurned as FeesBurnedEvent,
-  DelegateChanged as DelegateChangedEvent,
-  DelegateVotesChanged as DelegateVotesChangedEvent,
 } from "../generated/ShaktiToken/ShaktiToken";
-import { TokenHolder, Transfer, Protocol, DailyStats } from "../generated/schema";
+import { Transfer } from "../generated/schema";
 import {
   ZERO_BD,
-  ZERO_BI,
   toDecimal,
   getOrCreateProtocol,
   getOrCreateTokenHolder,
@@ -95,8 +92,8 @@ export function handleApproval(event: ApprovalEvent): void {
 // ============ Fees Burned Handler ============
 
 export function handleFeesBurned(event: FeesBurnedEvent): void {
-  let from = event.params.from;
-  let feeAmount = toDecimal(event.params.feeAmount);
+  let burner = event.params.burner;
+  let feeAmount = toDecimal(event.params.totalAmount);
   let burnedAmount = toDecimal(event.params.burnedAmount);
   let timestamp = event.block.timestamp;
 
@@ -114,38 +111,8 @@ export function handleFeesBurned(event: FeesBurnedEvent): void {
   dailyStats.save();
 
   // Update holder stats
-  let holder = getOrCreateTokenHolder(from, timestamp);
+  let holder = getOrCreateTokenHolder(burner, timestamp);
   holder.totalBurned = holder.totalBurned.plus(burnedAmount);
-  holder.lastActivityAt = timestamp;
-  holder.save();
-}
-
-// ============ Delegation Handlers ============
-
-export function handleDelegateChanged(event: DelegateChangedEvent): void {
-  let delegator = event.params.delegator;
-  let newDelegate = event.params.toDelegate;
-  let timestamp = event.block.timestamp;
-
-  let holder = getOrCreateTokenHolder(delegator, timestamp);
-
-  if (newDelegate.equals(Address.zero())) {
-    holder.delegatedTo = null;
-  } else {
-    holder.delegatedTo = newDelegate;
-  }
-
-  holder.lastActivityAt = timestamp;
-  holder.save();
-}
-
-export function handleDelegateVotesChanged(event: DelegateVotesChangedEvent): void {
-  let delegate = event.params.delegate;
-  let newVotes = toDecimal(event.params.newBalance);
-  let timestamp = event.block.timestamp;
-
-  let holder = getOrCreateTokenHolder(delegate, timestamp);
-  holder.votingPower = newVotes;
   holder.lastActivityAt = timestamp;
   holder.save();
 }

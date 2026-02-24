@@ -74,7 +74,7 @@ class IEXCollector(BaseCollector):
             # The website structure may change, requiring maintenance
 
             # For demo purposes, creating synthetic hourly data
-            hours = pd.date_range(start=date, periods=24, freq="H")
+            hours = pd.date_range(start=date, periods=24, freq="h")
             data = pd.DataFrame(
                 {
                     "timestamp": hours,

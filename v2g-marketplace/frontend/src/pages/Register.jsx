@@ -6,12 +6,11 @@ function Register({ onSwitchToLogin }) {
   const { register, error, clearError } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [localError, setLocalError] = useState('');
 
   const validateForm = () => {
-    if (!email || !password || !confirmPassword) {
+    if (!email || !password) {
       setLocalError('Please fill in all fields');
       return false;
     }
@@ -23,11 +22,6 @@ function Register({ onSwitchToLogin }) {
 
     if (password.length < 6) {
       setLocalError('Password must be at least 6 characters');
-      return false;
-    }
-
-    if (password !== confirmPassword) {
-      setLocalError('Passwords do not match');
       return false;
     }
 
@@ -53,11 +47,17 @@ function Register({ onSwitchToLogin }) {
   };
 
   const displayError = localError || error;
+  const handleSwitchToLogin = (event) => {
+    event.preventDefault();
+    if (onSwitchToLogin) {
+      onSwitchToLogin();
+    }
+  };
 
   return (
     <div className="auth-container">
       <div className="auth-card">
-        <h2 className="auth-title">Create Account</h2>
+        <h2 className="auth-title">Register</h2>
         <p className="auth-subtitle">Join the V2G Marketplace</p>
 
         <form onSubmit={handleSubmit} className="auth-form">
@@ -91,34 +91,21 @@ function Register({ onSwitchToLogin }) {
             />
           </div>
 
-          <div className="form-group">
-            <label htmlFor="confirmPassword">Confirm Password</label>
-            <input
-              type="password"
-              id="confirmPassword"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="Re-enter your password"
-              disabled={loading}
-              autoComplete="new-password"
-            />
-          </div>
-
           <button type="submit" className="auth-button" disabled={loading}>
-            {loading ? 'Creating account...' : 'Create Account'}
+            {loading ? 'Registering...' : 'Register'}
           </button>
         </form>
 
         <div className="auth-footer">
           <p>
             Already have an account?{' '}
-            <button
-              type="button"
+            <a
+              href="/login"
               className="auth-link"
-              onClick={onSwitchToLogin}
+              onClick={handleSwitchToLogin}
             >
-              Sign in
-            </button>
+              Login
+            </a>
           </p>
         </div>
       </div>

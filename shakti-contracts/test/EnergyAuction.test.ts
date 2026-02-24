@@ -717,4 +717,117 @@ describe("EnergyAuction", function () {
         .to.emit(auction, "AskSubmitted");
     });
   });
+
+  // ============ Commit/Reveal + Batch Settlement ============
+  describe("Commit-Reveal Settlement", function () {
+    it("should commit, reveal, and settle via operator batch", async function () {
+      const { auction, auctioneer, operator, buyer1, seller1 } =
+        await loadFixture(deployWithAuctionFixture);
+
+      const quantity = 10_000n;
+      const buyPrice = ethers.parseEther("0.010");
+      const sellPrice = ethers.parseEther("0.008");
+      const settlementPrice = ethers.parseEther("0.009");
+      const revealWindow = 600;
+
+      const bidNonce = ethers.id("bid-nonce-1");
+      const askNonce = ethers.id("ask-nonce-1");
+
+      const bidCommitment = await auction.computeCommitment(
+        1,
+        buyer1.address,
+        quantity,
+        buyPrice,
+        true,
+        bidNonce
+      );
+      const askCommitment = await auction.computeCommitment(
+        1,
+        seller1.address,
+        quantity,
+        sellPrice,
+        false,
+        askNonce
+      );
+
+      await auction.connect(buyer1).commitOrder(1, bidCommitment, revealWindow);
+      await auction.connect(seller1).commitOrder(1, askCommitment, revealWindow);
+
+      await time.increase(MIN_DURATION + 1);
+      await auction.connect(auctioneer).closeAuction(1);
+
+      await auction.connect(buyer1).revealOrder(1, 0, quantity, buyPrice, true, bidNonce);
+      await auction.connect(seller1).revealOrder(1, 1, quantity, sellPrice, false, askNonce);
+
+      const buyerOrders = await auction.getTraderOrders(buyer1.address, 1);
+      const sellerOrders = await auction.getTraderOrders(seller1.address, 1);
+
+      await expect(
+        auction.connect(operator).settleBatch(1, settlementPrice, [
+          {
+            bidOrderId: buyerOrders[0],
+            askOrderId: sellerOrders[0],
+            quantity,
+          },
+        ])
+      ).to.emit(auction, "BatchSettled");
+
+      const round = await auction.getAuctionRound(1);
+      expect(round.state).to.equal(AuctionState.SETTLED);
+      expect(round.matchedOrders).to.equal(2);
+      expect(round.clearingPrice).to.equal(settlementPrice);
+    });
+
+    it("should reject reveal with invalid nonce/hash", async function () {
+      const { auction, auctioneer, buyer1 } = await loadFixture(deployWithAuctionFixture);
+
+      const quantity = 10_000n;
+      const buyPrice = ethers.parseEther("0.010");
+      const revealWindow = 600;
+      const validNonce = ethers.id("bid-valid");
+      const invalidNonce = ethers.id("bid-invalid");
+
+      const commitment = await auction.computeCommitment(
+        1,
+        buyer1.address,
+        quantity,
+        buyPrice,
+        true,
+        validNonce
+      );
+
+      await auction.connect(buyer1).commitOrder(1, commitment, revealWindow);
+      await time.increase(MIN_DURATION + 1);
+      await auction.connect(auctioneer).closeAuction(1);
+
+      await expect(
+        auction.connect(buyer1).revealOrder(1, 0, quantity, buyPrice, true, invalidNonce)
+      ).to.be.revertedWithCustomError(auction, "InvalidRevealData");
+    });
+
+    it("should block settlement while reveal window is open for unrevealed commits", async function () {
+      const { auction, auctioneer, operator, buyer1 } = await loadFixture(deployWithAuctionFixture);
+
+      const quantity = 10_000n;
+      const buyPrice = ethers.parseEther("0.010");
+      const revealWindow = 600;
+      const nonce = ethers.id("pending-bid");
+      const commitment = await auction.computeCommitment(
+        1,
+        buyer1.address,
+        quantity,
+        buyPrice,
+        true,
+        nonce
+      );
+
+      await auction.connect(buyer1).commitOrder(1, commitment, revealWindow);
+      await time.increase(MIN_DURATION + 1);
+      await auction.connect(auctioneer).closeAuction(1);
+
+      await expect(
+        auction.connect(operator).settleBatch(1, ethers.parseEther("0.009"), [])
+      ).to.be.revertedWithCustomError(auction, "RevealWindowOpen");
+    });
+  });
 });

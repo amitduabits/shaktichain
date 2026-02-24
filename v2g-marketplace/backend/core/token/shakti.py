@@ -145,7 +145,10 @@ class SHAKTIToken:
     @property
     def circulating_supply(self) -> float:
         """Non-staked circulating supply."""
-        return self._current_supply * (1 - self._staking_rate)
+        # Round unstaked fraction to avoid floating-point representation drift in
+        # deterministic tests at boundary values like 0.99.
+        unstaked_fraction = round(1 - self._staking_rate, 12)
+        return self._current_supply * unstaked_fraction
 
     def compute_velocity(
         self,

@@ -1,0 +1,11 @@
+agent_distribution: default
+baseline: null
+clearing_interval_seconds: null
+custom_params: {}
+duration_hours: null
+name: claim_matrix_dev_seed314
+num_agents: null
+num_runs: null
+random_seed: 314
+run_mode: quick
+scenario: normal_demand

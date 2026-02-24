@@ -3,11 +3,16 @@
 import logging
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import pandas as pd
-from feast import Entity, Feature, FeatureStore, FeatureView, FileSource, ValueType
-from feast.data_format import ParquetFormat
+
+try:
+    from feast import Entity, Feature, FeatureStore as FeastFeatureStore, FeatureView, FileSource, ValueType
+    from feast.data_format import ParquetFormat
+except ImportError:
+    Entity = Feature = FeatureView = FileSource = ValueType = ParquetFormat = None
+    FeastFeatureStore = None
 
 logger = logging.getLogger(__name__)
 
@@ -24,12 +29,16 @@ class ShaktiChainFeatureStore:
         self.repo_path = Path(repo_path)
         self.repo_path.mkdir(parents=True, exist_ok=True)
 
-        try:
-            self.store = FeatureStore(repo_path=str(self.repo_path))
-            logger.info(f"Initialized Feast feature store at {self.repo_path}")
-        except Exception as e:
-            logger.warning(f"Could not initialize Feast store: {e}")
+        if FeastFeatureStore is None:
+            logger.warning("Feast is not installed; ShaktiChainFeatureStore disabled")
             self.store = None
+        else:
+            try:
+                self.store = FeastFeatureStore(repo_path=str(self.repo_path))
+                logger.info(f"Initialized Feast feature store at {self.repo_path}")
+            except Exception as e:
+                logger.warning(f"Could not initialize Feast store: {e}")
+                self.store = None
 
     def create_feature_definitions(self) -> None:
         """Create feature definitions for SHAKTI-CHAIN."""
@@ -249,3 +258,51 @@ class ParquetFeatureStore:
         )
 
         return merged
+
+
+class FeatureStore:
+    """Backward-compatible lightweight feature store for integration tests."""
+
+    def __init__(self, backend: str = "memory", redis_url: Optional[str] = None):
+        self.backend = backend
+        self.redis_url = redis_url
+        self._memory: Dict[str, pd.DataFrame] = {}
+
+    def write(
+        self,
+        features: pd.DataFrame,
+        entity_id: str,
+        feature_names: List[str],
+    ) -> None:
+        if features.empty:
+            self._memory[entity_id] = pd.DataFrame(columns=["timestamp", *feature_names])
+            return
+
+        frame = features.copy()
+        if "timestamp" in frame.columns:
+            frame["timestamp"] = pd.to_datetime(frame["timestamp"])
+            frame = frame.sort_values("timestamp")
+
+        selected_cols = ["timestamp", *[c for c in feature_names if c in frame.columns]]
+        self._memory[entity_id] = frame[selected_cols].reset_index(drop=True)
+
+    def read(
+        self,
+        entity_id: str,
+        feature_names: List[str],
+        start_time: Optional[datetime] = None,
+        end_time: Optional[datetime] = None,
+    ) -> pd.DataFrame:
+        frame = self._memory.get(entity_id)
+        if frame is None or frame.empty:
+            return pd.DataFrame(columns=["timestamp", *feature_names])
+
+        result = frame.copy()
+        if "timestamp" in result.columns:
+            if start_time is not None:
+                result = result[result["timestamp"] >= pd.Timestamp(start_time)]
+            if end_time is not None:
+                result = result[result["timestamp"] <= pd.Timestamp(end_time)]
+
+        keep_cols = ["timestamp", *[c for c in feature_names if c in result.columns]]
+        return result[keep_cols].reset_index(drop=True)

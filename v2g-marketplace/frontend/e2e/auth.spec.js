@@ -55,9 +55,11 @@ test.describe('Authentication', () => {
     });
 
     test('successful login redirects to dashboard', async ({ page }) => {
+      const loginEmail = `logintest${Date.now()}@example.com`;
+
       // First register a user
       await page.goto('/register');
-      await page.getByLabel(/email/i).fill('logintest@example.com');
+      await page.getByLabel(/email/i).fill(loginEmail);
       await page.getByLabel(/password/i).fill('password123');
       await page.getByRole('button', { name: /register|sign up/i }).click();
 
@@ -72,7 +74,7 @@ test.describe('Authentication', () => {
 
       // Now login
       await page.goto('/login');
-      await page.getByLabel(/email/i).fill('logintest@example.com');
+      await page.getByLabel(/email/i).fill(loginEmail);
       await page.getByLabel(/password/i).fill('password123');
       await page.getByRole('button', { name: /login/i }).click();
 
