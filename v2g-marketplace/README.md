@@ -2,7 +2,7 @@
 
 A comprehensive Vehicle-to-Grid (V2G) energy trading platform designed for the Indian energy market, featuring blockchain integration, incentive-compatible auctions, and intelligent agent-based trading.
 
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![License](https://img.shields.io/badge/license-BITS%20Pilani%20All%20Rights%20Reserved-red.svg)
 ![Python](https://img.shields.io/badge/python-3.9+-blue.svg)
 ![React](https://img.shields.io/badge/react-19.2.0-blue.svg)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-green.svg)
@@ -43,6 +43,22 @@ That's it! The platform is now running with:
 - Backend FastAPI server on port 8000
 - SQLite database with initial schema
 - Nginx reverse proxy configured
+
+## Demo Mode Runbook
+
+Use this flow for a no-wallet, presentation-quality demo with interactive buy/sell/staking.
+
+1. Start backend and frontend (Docker or manual setup above).
+2. Ensure demo mode env flags are enabled:
+   - Frontend: `VITE_DEMO_ONLY=true`
+   - Backend: `ENVIRONMENT=development` (or `ENABLE_DEMO_LOGIN=true`)
+3. Open the app login page and click `Enter Demo`.
+4. On the dashboard:
+   - Place buy and sell orders from the order form.
+   - Stake, unstake, and claim rewards from the staking panel.
+   - Review filled orders and fee burn/staker allocation in `Demo Activity`.
+5. Refresh the browser to confirm demo state persistence.
+6. Click `Reset Demo Data` to return to seeded demo values.
 
 ## Screenshots
 
@@ -575,7 +591,7 @@ We welcome contributions! Please follow these guidelines:
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+Copyright BITS Pilani. All rights reserved. The root [LICENSE](../LICENSE) governs this tree. Nested MIT badges in older drafts are not a grant of rights.
 
 ## Documentation
 

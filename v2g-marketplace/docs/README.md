@@ -121,4 +121,4 @@ See [CHANGELOG](../CHANGELOG.md) for detailed release notes.
 
 ## License
 
-V2G Marketplace is released under the MIT License. See [LICENSE](../LICENSE) for details.
+Copyright BITS Pilani. All rights reserved. See the repository root `LICENSE`.
