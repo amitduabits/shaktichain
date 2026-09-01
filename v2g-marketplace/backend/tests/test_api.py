@@ -175,6 +175,42 @@ class TestAuthEndpoints(TestSetup):
         })
         assert response.status_code == 401
 
+    def test_demo_login_returns_token(self, client):
+        """Test demo login returns an access token in non-production environments."""
+        response = client.post("/auth/demo-login")
+        assert response.status_code == 200
+        data = response.json()
+        assert "access_token" in data
+        assert data["token_type"] == "bearer"
+
+    def test_demo_login_is_idempotent(self, client):
+        """Test demo login consistently maps to the same seeded demo user."""
+        first = client.post("/auth/demo-login")
+        second = client.post("/auth/demo-login")
+
+        assert first.status_code == 200
+        assert second.status_code == 200
+
+        first_headers = {"Authorization": f"Bearer {first.json()['access_token']}"}
+        second_headers = {"Authorization": f"Bearer {second.json()['access_token']}"}
+
+        first_user = client.get("/auth/me", headers=first_headers)
+        second_user = client.get("/auth/me", headers=second_headers)
+
+        assert first_user.status_code == 200
+        assert second_user.status_code == 200
+        assert first_user.json()["id"] == second_user.json()["id"]
+        assert first_user.json()["email"] == second_user.json()["email"]
+
+    def test_demo_login_disabled_in_production(self, client, monkeypatch):
+        """Test demo login is blocked in production when not explicitly enabled."""
+        monkeypatch.setenv("ENVIRONMENT", "production")
+        monkeypatch.delenv("ENABLE_DEMO_LOGIN", raising=False)
+
+        response = client.post("/auth/demo-login")
+        assert response.status_code == 403
+        assert "disabled" in response.json()["detail"].lower()
+
     def test_get_current_user_authenticated(self, client, auth_headers):
         """Test getting current user info when authenticated."""
         response = client.get("/auth/me", headers=auth_headers)
@@ -551,6 +587,36 @@ class TestAuctionEndpoints(TestSetup):
         assert orderbook.status_code == 200
         assert "bids" in orderbook.json()
         assert "asks" in orderbook.json()
+
+    def test_reveal_wrong_nonce_rejected(self, client, auth_headers):
+        round_id = "round-bad-nonce"
+        nonce = "good"
+        price = 7.0
+        commit_hash = self._commit_hash(round_id, "p1", "buy", 10.0, price, nonce)
+        commit = client.post("/auction/commit", json={
+            "round_id": round_id,
+            "prosumer_id": "p1",
+            "side": "buy",
+            "quantity": 10.0,
+            "commit_hash": commit_hash,
+            "reveal_window_minutes": 1,
+        }, headers=auth_headers)
+        assert commit.status_code == 200
+        order_id = commit.json()["order_id"]
+        reveal = client.post("/auction/reveal", json={
+            "round_id": round_id,
+            "order_id": order_id,
+            "prosumer_id": "p1",
+            "side": "buy",
+            "quantity": 10.0,
+            "price": price,
+            "nonce": "wrong",
+        }, headers=auth_headers)
+        assert reveal.status_code in (400, 409, 422)
+
+    def test_create_simulation_zero_agents_rejected(self, client, auth_headers):
+        response = client.post("/simulations", json={"n_agents": 0, "n_days": 1}, headers=auth_headers)
+        assert response.status_code == 422
 
 
 class TestErrorHandling(TestSetup):

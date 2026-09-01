@@ -1,8 +1,8 @@
 import React from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { useAccount, useChainId, useBalance } from 'wagmi';
+import { useAccount } from 'wagmi';
 import { useAppMode } from '../../providers/Web3Provider';
-import { useShaktiBalance, useUserInfo, TIER_NAMES, TIER_COLORS } from '../../contracts/hooks';
+import { useShaktiBalance, useUserInfo } from '../../contracts/hooks';
 
 interface ConnectWalletProps {
   showBalance?: boolean;
@@ -15,23 +15,22 @@ export function ConnectWallet({
   showTier = true,
   compact = false,
 }: ConnectWalletProps) {
-  const { isLiveMode, isSimulationMode, toggleMode } = useAppMode();
-  const { isConnected, address } = useAccount();
-  const chainId = useChainId();
+  const { isLiveMode, isSimulationMode, demoOnly, canUseLiveMode, toggleMode } = useAppMode();
+  const { isConnected } = useAccount();
 
   // Only fetch on-chain data when in live mode and connected
   const { balance: shaktiBalance } = useShaktiBalance();
-  const { data: nativeBalance } = useBalance({
-    address,
-    query: { enabled: isLiveMode && isConnected },
-  });
   const { userInfo, tierName, tierColor } = useUserInfo();
 
   if (compact) {
     return (
       <div className="connect-wallet-compact">
-        <ModeToggle isLiveMode={isLiveMode} onToggle={toggleMode} />
-        {isLiveMode && (
+        {demoOnly ? (
+          <span className="demo-only-pill">Demo Mode</span>
+        ) : (
+          <ModeToggle isLiveMode={isLiveMode} onToggle={toggleMode} />
+        )}
+        {!demoOnly && isLiveMode && (
           <ConnectButton
             accountStatus="avatar"
             chainStatus="icon"
@@ -44,16 +43,18 @@ export function ConnectWallet({
 
   return (
     <div className="connect-wallet">
-      {/* Mode Toggle */}
       <div className="mode-toggle-container">
-        <ModeToggle isLiveMode={isLiveMode} onToggle={toggleMode} />
+        {!demoOnly && canUseLiveMode ? (
+          <ModeToggle isLiveMode={isLiveMode} onToggle={toggleMode} />
+        ) : (
+          <span className="demo-only-pill">Demo Mode</span>
+        )}
         <span className="mode-label">
-          {isSimulationMode ? 'Simulation Mode' : 'Live Blockchain'}
+          {demoOnly ? 'Demo-only presentation mode' : isSimulationMode ? 'Simulation Mode' : 'Live Blockchain'}
         </span>
       </div>
 
-      {/* Wallet Connection (only in live mode) */}
-      {isLiveMode && (
+      {!demoOnly && isLiveMode && (
         <div className="wallet-section">
           <ConnectButton
             accountStatus={{
@@ -70,10 +71,8 @@ export function ConnectWallet({
             }}
           />
 
-          {/* Additional info when connected */}
           {isConnected && (
             <div className="wallet-info">
-              {/* SHAKTI Balance */}
               {showBalance && (
                 <div className="balance-display">
                   <span className="balance-label">SHAKTI:</span>
@@ -85,7 +84,6 @@ export function ConnectWallet({
                 </div>
               )}
 
-              {/* Reputation Tier */}
               {showTier && userInfo && (
                 <div className="tier-badge" style={{ backgroundColor: tierColor }}>
                   {tierName}
@@ -96,12 +94,13 @@ export function ConnectWallet({
         </div>
       )}
 
-      {/* Simulation mode indicator */}
       {isSimulationMode && (
         <div className="simulation-indicator">
-          <span className="simulation-icon">🎮</span>
+          <span className="simulation-icon">Demo</span>
           <span className="simulation-text">
-            Using simulated data. Switch to Live mode to connect your wallet.
+            {demoOnly
+              ? 'Wallet controls are hidden in demo mode.'
+              : 'Using simulated data. Switch to Live mode to connect your wallet.'}
           </span>
         </div>
       )}
@@ -109,7 +108,6 @@ export function ConnectWallet({
   );
 }
 
-// Mode toggle component
 interface ModeToggleProps {
   isLiveMode: boolean;
   onToggle: () => void;
@@ -129,7 +127,6 @@ function ModeToggle({ isLiveMode, onToggle }: ModeToggleProps) {
   );
 }
 
-// Styles (can be moved to CSS file)
 const styles = `
 .connect-wallet {
   display: flex;
@@ -141,6 +138,17 @@ const styles = `
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.demo-only-pill {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.18);
+  color: #34d399;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .mode-toggle-container {
@@ -260,7 +268,11 @@ const styles = `
 }
 
 .simulation-icon {
-  font-size: 16px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #93c5fd;
 }
 
 .simulation-text {
@@ -269,7 +281,6 @@ const styles = `
 }
 `;
 
-// Inject styles
 if (typeof document !== 'undefined') {
   const styleSheet = document.createElement('style');
   styleSheet.textContent = styles;

@@ -3,6 +3,7 @@ import Dashboard from './components/Dashboard';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { DemoLedgerProvider } from './context/DemoLedgerContext';
 import { Web3Provider } from './providers/Web3Provider';
 import { ConnectWallet, TransactionStatus } from './components/web3';
 import { getHealth } from './services/api';
@@ -155,7 +156,9 @@ function App() {
   return (
     <Web3Provider defaultMode="simulation" theme="dark">
       <AuthProvider>
-        <AppContent />
+        <DemoLedgerProvider>
+          <AppContent />
+        </DemoLedgerProvider>
       </AuthProvider>
     </Web3Provider>
   );

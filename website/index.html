@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Shakti-Chain · BITS Pilani</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <div class="brand">BITS PILANI · CDRF</div>
+    <div class="meta">Industry briefing</div>
+  </header>
+  <main>
+    <h1>Shakti-Chain</h1>
+    <p class="lede">A vehicle-to-grid marketplace with a McAfee double auction and Layer-2 settlement. Electric-vehicle owners, fleets, and buyers trade energy in 15-minute rounds. Matching stays off-chain. Settlement uses an ERC-20 token on Polygon with a mint-on-delivery, burn-on-redemption lifecycle designed as 1 token = 1 kWh.</p>
+    <p>
+      <a class="cta" href="https://github.com/amitduabits/shaktichain">View the source on GitHub</a>
+      <a class="cta secondary" href="assets/briefing.pdf">Download the two-page briefing</a>
+    </p>
+    <p>The live marketplace demo is a <strong>simulation</strong>, not a live DISCOM interconnection. Run it locally from the repository (<code>DEMO.md</code>) or ask the investigators for a hosted walkthrough.</p>
+
+    <section class="stats" aria-label="Measured simulation results">
+      <div class="stat"><strong>97.3%</strong><span>Allocative efficiency (MEASURED, simulation)</span></div>
+      <div class="stat"><strong>18.7%</strong><span>Gross ROI vs time-of-use (MEASURED)</span></div>
+      <div class="stat"><strong>0.007%</strong><span>kWh peg deviation (MEASURED)</span></div>
+      <div class="stat limit"><strong>12.3%</strong><span>5-agent coalition surplus (failed 10% cap)</span></div>
+    </section>
+
+    <h2>Architecture</h2>
+    <img class="arch" src="assets/architecture.png" alt="Four-layer Shakti-Chain architecture: application, intelligence, market, settlement" />
+
+    <h2>Who this conversation is for</h2>
+    <div class="who">
+      <article><h3>DISCOMs</h3><p>A clearing layer above existing metering, with a feeder hosting-capacity wrapper after each round.</p></article>
+      <article><h3>Charge-point operators and OEMs</h3><p>Software to monetise bidirectional chargers without inventing the auction and token from scratch.</p></article>
+      <article><h3>Fleets</h3><p>Sell parked energy in the evening peak under a rule that does not punish honest bidding.</p></article>
+      <article><h3>Aggregators</h3><p>A licenceable matching and settlement stack. This is not a consumer app.</p></article>
+    </div>
+
+    <h2>Status</h2>
+    <div class="status">
+      Working software demonstration. Indian patent application filed. Assignee BITS Pilani. Not open-source. Not MIT. Voltage regulation and transformer thermal limits are out of scope.
+    </div>
+
+    <h2>Investigators</h2>
+    <p>Prof. Amit Dua · Computer Science &amp; Information Systems · <a href="mailto:amit.dua@pilani.bits-pilani.ac.in">amit.dua@pilani.bits-pilani.ac.in</a></p>
+    <p>Prof. Hari Om Bansal · Electrical &amp; Electronics Engineering · <a href="mailto:hbansal@pilani.bits-pilani.ac.in">hbansal@pilani.bits-pilani.ac.in</a></p>
+  </main>
+  <footer>
+    Copyright BITS Pilani. All rights reserved. Simulation measurements from a 2,000-agent evaluation on Delhi, Mumbai, Bangalore, Chennai, and Kolkata load profiles. Viewing this page is not a licence.
+  </footer>
+</body>
+</html>

@@ -3,11 +3,12 @@ import { useAuth } from '../context/AuthContext';
 import './Auth.css';
 
 function Login({ onSwitchToRegister }) {
-  const { login, error, clearError } = useAuth();
+  const { login, demoLogin, error, clearError } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [remember, setRemember] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [demoLoading, setDemoLoading] = useState(false);
   const [localError, setLocalError] = useState('');
 
   const handleSubmit = async (e) => {
@@ -20,16 +21,28 @@ function Login({ onSwitchToRegister }) {
       return;
     }
 
-    setLoading(true);
+    setLoginLoading(true);
     const result = await login(email, password, remember);
-    setLoading(false);
+    setLoginLoading(false);
 
     if (!result.success) {
       setLocalError(result.error);
     }
   };
 
+  const handleDemoLogin = async () => {
+    setLocalError('');
+    clearError();
+    setDemoLoading(true);
+    const result = await demoLogin();
+    setDemoLoading(false);
+    if (!result.success) {
+      setLocalError(result.error);
+    }
+  };
+
   const displayError = localError || error;
+  const isBusy = loginLoading || demoLoading;
   const handleSwitchToRegister = (event) => {
     event.preventDefault();
     if (onSwitchToRegister) {
@@ -56,7 +69,7 @@ function Login({ onSwitchToRegister }) {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
-              disabled={loading}
+              disabled={isBusy}
               autoComplete="email"
             />
           </div>
@@ -69,7 +82,7 @@ function Login({ onSwitchToRegister }) {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter your password"
-              disabled={loading}
+              disabled={isBusy}
               autoComplete="current-password"
             />
           </div>
@@ -80,14 +93,22 @@ function Login({ onSwitchToRegister }) {
                 type="checkbox"
                 checked={remember}
                 onChange={(e) => setRemember(e.target.checked)}
-                disabled={loading}
+                disabled={isBusy}
               />
               <span>Remember me</span>
             </label>
           </div>
 
-          <button type="submit" className="auth-button" disabled={loading}>
-            {loading ? 'Logging in...' : 'Login'}
+          <button type="submit" className="auth-button" disabled={isBusy}>
+            {loginLoading ? 'Logging in...' : 'Login'}
+          </button>
+          <button
+            type="button"
+            className="auth-button auth-button-secondary"
+            onClick={handleDemoLogin}
+            disabled={isBusy}
+          >
+            {demoLoading ? 'Entering Demo...' : 'Enter Demo'}
           </button>
         </form>
 

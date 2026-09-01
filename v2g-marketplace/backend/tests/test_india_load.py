@@ -150,6 +150,10 @@ class TestIndiaLoadProfile:
         """Test Bangalore regional multiplier (pleasant climate)."""
         assert profile.get_regional_multiplier("Bangalore") == 1.1
 
+    def test_kolkata_regional_multiplier(self, profile):
+        assert profile.get_regional_multiplier("Kolkata") == 1.15
+        assert profile.get_regional_multiplier("kolkata") == 1.15
+
     def test_unknown_region_returns_default(self, profile):
         """Test unknown regions return default multiplier."""
         assert profile.get_regional_multiplier("UnknownCity") == 1.0

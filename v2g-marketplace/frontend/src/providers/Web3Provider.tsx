@@ -1,10 +1,25 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { WagmiProvider } from 'wagmi';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RainbowKitProvider, darkTheme, lightTheme } from '@rainbow-me/rainbowkit';
 import { config, getDefaultChain } from '../config/wagmi';
 
 import '@rainbow-me/rainbowkit/styles.css';
+
+function parseEnvBoolean(value: unknown, defaultValue = false): boolean {
+  if (typeof value !== 'string') {
+    return defaultValue;
+  }
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) {
+    return defaultValue;
+  }
+  return ['1', 'true', 'yes', 'on'].includes(normalized);
+}
+
+const DEMO_ONLY_ENV = parseEnvBoolean(import.meta.env.VITE_DEMO_ONLY, import.meta.env.DEV);
+const LIVE_MODE_ENV = parseEnvBoolean(import.meta.env.VITE_ENABLE_LIVE_MODE, !DEMO_ONLY_ENV);
+const DEMO_ONLY_MODE = DEMO_ONLY_ENV || !LIVE_MODE_ENV;
 
 // Query client for TanStack Query
 const queryClient = new QueryClient({
@@ -26,6 +41,8 @@ interface ModeContextType {
   setMode: (mode: AppMode) => void;
   isLiveMode: boolean;
   isSimulationMode: boolean;
+  demoOnly: boolean;
+  canUseLiveMode: boolean;
   toggleMode: () => void;
 }
 
@@ -46,6 +63,8 @@ export function useOptionalAppMode(): ModeContextType {
     setMode: () => {},
     isLiveMode: false,
     isSimulationMode: true,
+    demoOnly: true,
+    canUseLiveMode: false,
     toggleMode: () => {},
   };
 }
@@ -91,17 +110,49 @@ export function Web3Provider({
   defaultMode = 'simulation',
   theme = 'dark'
 }: Web3ProviderProps) {
+  const resolvedDefaultMode: AppMode = DEMO_ONLY_MODE ? 'simulation' : defaultMode;
+
   // Mode state
-  const [mode, setModeState] = useState<AppMode>(defaultMode);
+  const [mode, setModeState] = useState<AppMode>(() => {
+    if (typeof window === 'undefined') {
+      return resolvedDefaultMode;
+    }
+
+    try {
+      const persistedMode = localStorage.getItem('shakti-app-mode');
+      if (persistedMode === 'simulation' || persistedMode === 'live') {
+        if (DEMO_ONLY_MODE && persistedMode === 'live') {
+          return 'simulation';
+        }
+        return persistedMode;
+      }
+    } catch (_error) {
+      // Ignore localStorage errors and use defaults.
+    }
+
+    return resolvedDefaultMode;
+  });
   const [web3Error, setWeb3Error] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (DEMO_ONLY_MODE && mode !== 'simulation') {
+      setModeState('simulation');
+    }
+  }, [mode]);
+
   const setMode = useCallback((newMode: AppMode) => {
-    setModeState(newMode);
+    const safeMode = DEMO_ONLY_MODE && newMode === 'live' ? 'simulation' : newMode;
+    setModeState(safeMode);
     // Persist preference
-    localStorage.setItem('shakti-app-mode', newMode);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('shakti-app-mode', safeMode);
+    }
   }, []);
 
   const toggleMode = useCallback(() => {
+    if (DEMO_ONLY_MODE) {
+      return;
+    }
     setMode(mode === 'simulation' ? 'live' : 'simulation');
   }, [mode, setMode]);
 
@@ -110,6 +161,8 @@ export function Web3Provider({
     setMode,
     isLiveMode: mode === 'live',
     isSimulationMode: mode === 'simulation',
+    demoOnly: DEMO_ONLY_MODE,
+    canUseLiveMode: !DEMO_ONLY_MODE,
     toggleMode,
   };
 

@@ -1,6 +1,7 @@
 import React from 'react';
 import { useAccount } from 'wagmi';
 import { useAppMode } from '../../providers/Web3Provider';
+import { useDemoLedger } from '../../context/DemoLedgerContext';
 import { useShaktiBalance, useShaktiTokenInfo, useVotingPower } from '../../contracts/hooks';
 
 interface TokenBalanceProps {
@@ -17,6 +18,7 @@ export function TokenBalance({
   simulatedBalance = '1000.00',
 }: TokenBalanceProps) {
   const { isLiveMode, isSimulationMode } = useAppMode();
+  const { ledger } = useDemoLedger();
   const { isConnected } = useAccount();
 
   // Live blockchain data
@@ -25,9 +27,12 @@ export function TokenBalance({
   const { votingPower, isLoading: votingLoading } = useVotingPower();
 
   // Use simulated or live data based on mode
-  const displayBalance = isSimulationMode ? simulatedBalance : balance;
+  const demoBalance = String(ledger?.account?.tokenBalance ?? simulatedBalance);
+  const displayBalance = isSimulationMode ? demoBalance : balance;
   const displaySymbol = isSimulationMode ? 'SHAKTI' : (symbol || 'SHAKTI');
-  const displayVotingPower = isSimulationMode ? simulatedBalance : votingPower;
+  const displayVotingPower = isSimulationMode
+    ? String(ledger?.account?.stakedAmount ?? simulatedBalance)
+    : votingPower;
   const displayTotalSupply = isSimulationMode ? '100,000,000' : totalSupply;
 
   const isLoading = isLiveMode && (balanceLoading || infoLoading || votingLoading);
@@ -127,7 +132,7 @@ export function TokenBalance({
   // Default variant
   return (
     <div className="token-balance">
-      <div className="balance-icon">💎</div>
+      <div className="balance-icon">TK</div>
       <div className="balance-content">
         {isLoading ? (
           <span className="loading">Loading...</span>
@@ -180,7 +185,16 @@ const styles = `
 }
 
 .balance-icon {
-  font-size: 20px;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.2);
+  color: #6ee7b7;
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .balance-content {
@@ -297,3 +311,4 @@ if (typeof document !== 'undefined') {
 }
 
 export default TokenBalance;
+

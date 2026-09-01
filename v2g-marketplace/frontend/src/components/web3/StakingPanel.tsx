@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAccount } from 'wagmi';
 import { useAppMode } from '../../providers/Web3Provider';
+import { useDemoLedger } from '../../context/DemoLedgerContext';
 import {
   useStakingPoolStats,
   useStakeInfo,
@@ -27,13 +28,15 @@ interface StakingPanelProps {
 
 export function StakingPanel({ simulatedData }: StakingPanelProps) {
   const { isLiveMode, isSimulationMode } = useAppMode();
-  const { isConnected, address } = useAccount();
+  const { ledger, stake: stakeDemo, unstake: unstakeDemo, claimRewards: claimDemoRewards } = useDemoLedger();
+  const { isConnected } = useAccount();
   const chainId = useChainId();
 
   // Form state
   const [stakeAmount, setStakeAmount] = useState('');
   const [unstakeAmount, setUnstakeAmount] = useState('');
   const [activeTab, setActiveTab] = useState<'stake' | 'unstake'>('stake');
+  const [formError, setFormError] = useState('');
 
   // Live blockchain data
   const { totalStaked, apr, minStakeAmount, lockPeriod } = useStakingPoolStats();
@@ -59,14 +62,14 @@ export function StakingPanel({ simulatedData }: StakingPanelProps) {
 
   // Use simulated or live data
   const displayStakedAmount = isSimulationMode
-    ? simulatedData?.stakedAmount || '500.00'
+    ? String(ledger?.account?.stakedAmount ?? simulatedData?.stakedAmount ?? '500.00')
     : stakedAmount;
   const displayPendingRewards = isSimulationMode
-    ? simulatedData?.pendingRewards || '12.50'
+    ? String(ledger?.account?.pendingRewards ?? simulatedData?.pendingRewards ?? '12.50')
     : pendingRewards || earned;
-  const displayApr = isSimulationMode ? simulatedData?.apr || 12.5 : apr || 0;
+  const displayApr = isSimulationMode ? ledger?.staking?.apr ?? simulatedData?.apr ?? 12.5 : apr || 0;
   const displayTotalStaked = isSimulationMode
-    ? simulatedData?.totalStaked || '5,000,000'
+    ? ledger?.staking?.totalStaked ?? simulatedData?.totalStaked ?? '5,000,000'
     : totalStaked;
 
   // Reset forms after successful transactions
@@ -101,6 +104,17 @@ export function StakingPanel({ simulatedData }: StakingPanelProps) {
   // Handle stake
   const handleStake = async () => {
     if (!stakeAmount || parseFloat(stakeAmount) <= 0) return;
+    setFormError('');
+
+    if (isSimulationMode) {
+      const result = stakeDemo(stakeAmount);
+      if (!result.success) {
+        setFormError(result.error);
+        return;
+      }
+      setStakeAmount('');
+      return;
+    }
 
     if (needsApproval && stakingPoolAddress) {
       await approve(stakingPoolAddress, stakeAmount);
@@ -112,17 +126,38 @@ export function StakingPanel({ simulatedData }: StakingPanelProps) {
   // Handle unstake
   const handleUnstake = async () => {
     if (!unstakeAmount || parseFloat(unstakeAmount) <= 0) return;
+    setFormError('');
+
+    if (isSimulationMode) {
+      const result = unstakeDemo(unstakeAmount);
+      if (!result.success) {
+        setFormError(result.error);
+        return;
+      }
+      setUnstakeAmount('');
+      return;
+    }
+
     await unstake(unstakeAmount);
   };
 
   // Handle claim
   const handleClaim = async () => {
+    setFormError('');
+    if (isSimulationMode) {
+      const result = claimDemoRewards();
+      if (!result.success) {
+        setFormError(result.error);
+      }
+      return;
+    }
+
     await claimRewards();
   };
 
   // Set max amounts
   const setMaxStake = () => {
-    const max = isSimulationMode ? '1000' : shaktiBalance;
+    const max = isSimulationMode ? String(ledger?.account?.tokenBalance ?? 0) : shaktiBalance;
     setStakeAmount(max);
   };
 
@@ -308,6 +343,8 @@ export function StakingPanel({ simulatedData }: StakingPanelProps) {
           </button>
         </div>
       )}
+
+      {formError && <div className="connect-prompt error">{formError}</div>}
 
       {/* Connect Wallet Prompt */}
       {isLiveMode && !isConnected && (
@@ -551,6 +588,12 @@ const styles = `
   background: rgba(17, 24, 39, 0.3);
   border-radius: 8px;
   margin-top: 16px;
+}
+
+.connect-prompt.error {
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.12);
 }
 
 .sim-badge {

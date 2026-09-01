@@ -1,5 +1,10 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { login as apiLogin, register as apiRegister, getCurrentUser } from '../services/api';
+import {
+  login as apiLogin,
+  register as apiRegister,
+  demoLogin as apiDemoLogin,
+  getCurrentUser,
+} from '../services/api';
 
 const AuthContext = createContext(null);
 
@@ -78,16 +83,23 @@ export function AuthProvider({ children }) {
     return () => clearInterval(interval);
   }, [logout]);
 
+  const consumeToken = useCallback(async (token, remember = false) => {
+    localStorage.setItem(TOKEN_KEY, token);
+    if (remember) {
+      localStorage.setItem(REMEMBER_KEY, 'true');
+    } else {
+      localStorage.removeItem(REMEMBER_KEY);
+    }
+    const userData = await getCurrentUser();
+    setUser(userData);
+    return userData;
+  }, []);
+
   const login = async (email, password, remember = false) => {
     setError(null);
     try {
       const response = await apiLogin({ email, password });
-      localStorage.setItem(TOKEN_KEY, response.access_token);
-      if (remember) {
-        localStorage.setItem(REMEMBER_KEY, 'true');
-      }
-      const userData = await getCurrentUser();
-      setUser(userData);
+      await consumeToken(response.access_token, remember);
       return { success: true };
     } catch (err) {
       const message = err.message || 'Login failed';
@@ -100,12 +112,23 @@ export function AuthProvider({ children }) {
     setError(null);
     try {
       const response = await apiRegister({ email, password });
-      localStorage.setItem(TOKEN_KEY, response.access_token);
-      const userData = await getCurrentUser();
-      setUser(userData);
+      await consumeToken(response.access_token, false);
       return { success: true };
     } catch (err) {
       const message = err.message || 'Registration failed';
+      setError(message);
+      return { success: false, error: message };
+    }
+  };
+
+  const demoLogin = async () => {
+    setError(null);
+    try {
+      const response = await apiDemoLogin();
+      await consumeToken(response.access_token, false);
+      return { success: true };
+    } catch (err) {
+      const message = err.message || 'Demo login failed';
       setError(message);
       return { success: false, error: message };
     }
@@ -117,8 +140,10 @@ export function AuthProvider({ children }) {
     error,
     isAuthenticated: !!user,
     login,
+    demoLogin,
     logout,
     register,
+    consumeToken,
     clearError: () => setError(null),
   };
 

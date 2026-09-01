@@ -9,6 +9,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
+import secrets
 
 import bcrypt
 import jwt
@@ -116,6 +117,27 @@ def decode_token(token: str) -> Optional[dict]:
     except jwt.InvalidTokenError as e:
         logger.warning("token_invalid", message="Invalid JWT token", error=str(e))
         return None
+
+
+def _parse_bool_env(value: Optional[str]) -> bool:
+    """Parse a truthy environment variable value."""
+    if value is None:
+        return False
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def is_demo_login_enabled() -> bool:
+    """
+    Determine if demo login endpoint is enabled.
+
+    Demo login is enabled in non-production environments by default, or
+    explicitly with ENABLE_DEMO_LOGIN=true.
+    """
+    if _parse_bool_env(os.getenv("ENABLE_DEMO_LOGIN")):
+        return True
+
+    environment = os.getenv("ENVIRONMENT", "development").strip().lower()
+    return environment in {"development", "dev", "test"}
 
 
 # === Dependencies ===
@@ -295,6 +317,52 @@ async def login(user_data: UserLogin):
     # Generate token
     token = create_access_token(user["id"], user["email"], user["role"])
 
+    return TokenResponse(access_token=token)
+
+
+@router.post("/demo-login", response_model=TokenResponse)
+async def demo_login():
+    """
+    Login with a seeded demo user.
+
+    Intended for development demos where walletless simulation mode is used.
+    """
+    if not is_demo_login_enabled():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Demo login is disabled in this environment",
+        )
+
+    db = get_database()
+    demo_email = os.getenv("DEMO_USER_EMAIL", "demo@v2g.local")
+    demo_role = os.getenv("DEMO_USER_ROLE", "user")
+    demo_password = os.getenv("DEMO_USER_PASSWORD", "demo-mode-not-for-production")
+
+    user = db.get_user_by_email(demo_email)
+    if user is None:
+        password_hash = hash_password(demo_password)
+        user_id = db.create_user({
+            "email": demo_email,
+            "password_hash": password_hash,
+            "role": demo_role,
+        })
+        user = db.get_user_by_id(user_id)
+        logger.info(
+            "demo_user_created",
+            user_id=user_id,
+            email=demo_email,
+            token_hint=secrets.token_hex(4),
+        )
+
+    # Record as successful login for observability consistency.
+    record_user_login(success=True)
+    logger.info(
+        "demo_user_logged_in",
+        user_id=user["id"],
+        email=user["email"],
+    )
+
+    token = create_access_token(user["id"], user["email"], user["role"])
     return TokenResponse(access_token=token)
 
 

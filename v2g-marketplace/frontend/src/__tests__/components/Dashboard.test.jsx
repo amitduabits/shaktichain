@@ -26,15 +26,43 @@ vi.mock('../../providers/Web3Provider', () => ({
     mode: 'simulation',
     isLiveMode: false,
     isSimulationMode: true,
+    demoOnly: true,
+    canUseLiveMode: false,
     setMode: vi.fn(),
     toggleMode: vi.fn(),
   }),
+}));
+
+vi.mock('../../context/DemoLedgerContext', () => ({
+  useDemoLedger: () => ({
+    ledger: {
+      market: {
+        currentRound: 42,
+        totalTrades: 3,
+        totalVolumeKwh: 150,
+      },
+      account: {
+        stakedAmount: 500,
+        pendingRewards: 12.5,
+      },
+      staking: {
+        apr: 12.5,
+        totalStaked: 5000000,
+      },
+    },
+  }),
+}));
+
+vi.mock('../../demo/ledger', () => ({
+  getRoundTimeRemaining: () => 300,
 }));
 
 vi.mock('../../components/web3', () => ({
   TokenBalance: () => <div data-testid="token-balance">Token Balance Mock</div>,
   StakingPanel: () => <div data-testid="staking-panel">Staking Panel Mock</div>,
   BidForm: () => <div data-testid="bid-form">Bid Form Mock</div>,
+  DemoActivityPanel: () => <div data-testid="demo-activity-panel">Demo Activity Mock</div>,
+  AuctionRoundViewer: () => <div data-testid="auction-round-viewer">Auction Round Viewer Mock</div>,
 }));
 
 describe('Dashboard', () => {
@@ -50,6 +78,9 @@ describe('Dashboard', () => {
 
       // Check header
       expect(screen.getByText('Energy Market Overview')).toBeInTheDocument();
+      expect(screen.getByTestId('sim-disclaimer')).toHaveTextContent(
+        'Simulation. Not connected to a live DISCOM.'
+      );
 
       // Check loading state initially
       expect(screen.getByText('Loading...')).toBeInTheDocument();
@@ -74,6 +105,22 @@ describe('Dashboard', () => {
       render(<Dashboard />);
 
       expect(screen.getByTestId('simulation-panel')).toBeInTheDocument();
+    });
+
+    it('renders demo activity panel in simulation mode', async () => {
+      api.getCurrentPrice.mockResolvedValue({ price: 6.5 });
+
+      render(<Dashboard />);
+
+      expect(screen.getByTestId('demo-activity-panel')).toBeInTheDocument();
+    });
+
+    it('renders auction round viewer in simulation mode', async () => {
+      api.getCurrentPrice.mockResolvedValue({ price: 6.5 });
+
+      render(<Dashboard />);
+
+      expect(screen.getByTestId('auction-round-viewer')).toBeInTheDocument();
     });
 
     it('renders stats cards', async () => {

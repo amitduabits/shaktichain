@@ -186,11 +186,66 @@ export async function login(credentials) {
 }
 
 /**
+ * One-click demo login for walletless presentations
+ * @returns {Promise<Object>} Token response with access_token
+ */
+export async function demoLogin() {
+  return api.post('/auth/demo-login');
+}
+
+/**
  * Get current authenticated user info
  * @returns {Promise<Object>} User object with id, email, role, created_at
  */
 export async function getCurrentUser() {
   return api.get('/auth/me');
+}
+
+// === Auction (commit-reveal) ===
+
+/**
+ * Commit a sealed order hash for an auction round
+ * @param {Object} payload
+ * @returns {Promise<Object>}
+ */
+export async function auctionCommit(payload) {
+  return api.post('/auction/commit', payload);
+}
+
+/**
+ * Reveal a committed order
+ * @param {Object} payload
+ * @returns {Promise<Object>}
+ */
+export async function auctionReveal(payload) {
+  return api.post('/auction/reveal', payload);
+}
+
+/**
+ * Settle a round in batch
+ * @param {Object} payload
+ * @returns {Promise<Object>}
+ */
+export async function settleAuctionBatch(payload) {
+  return api.post('/auction/settle-batch', payload);
+}
+
+/**
+ * Get one round summary
+ * @param {string} roundId
+ * @returns {Promise<Object>}
+ */
+export async function getAuctionRound(roundId) {
+  return api.get(`/auction/round/${roundId}`);
+}
+
+/**
+ * Get round orderbook
+ * @param {string} roundId
+ * @returns {Promise<Object>}
+ */
+export async function getAuctionOrderbook(roundId) {
+  return api.get(`/auction/orderbook/${roundId}`);
 }
 
 export default api;

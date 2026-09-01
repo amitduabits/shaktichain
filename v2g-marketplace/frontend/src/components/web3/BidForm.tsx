@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAccount, useChainId } from 'wagmi';
 import { useAppMode } from '../../providers/Web3Provider';
+import { useDemoLedger } from '../../context/DemoLedgerContext';
+import { getRoundTimeRemaining } from '../../demo/ledger';
 import {
   useAuctionStatus,
   useAuctionParams,
@@ -26,6 +28,7 @@ interface BidFormProps {
 
 export function BidForm({ onOrderSubmitted, simulatedData }: BidFormProps) {
   const { isLiveMode, isSimulationMode } = useAppMode();
+  const { ledger, placeOrder } = useDemoLedger();
   const { isConnected } = useAccount();
   const chainId = useChainId();
 
@@ -33,6 +36,7 @@ export function BidForm({ onOrderSubmitted, simulatedData }: BidFormProps) {
   const [orderType, setOrderType] = useState<OrderType>('bid');
   const [quantity, setQuantity] = useState('');
   const [price, setPrice] = useState('');
+  const [formError, setFormError] = useState('');
 
   // Live blockchain data
   const { currentRound, roundInfo, isOpen, timeRemaining, isLoading } = useAuctionStatus();
@@ -66,17 +70,15 @@ export function BidForm({ onOrderSubmitted, simulatedData }: BidFormProps) {
 
   // Use simulated or live data
   const displayRound = isSimulationMode
-    ? simulatedData?.currentRound || 42
+    ? ledger?.market?.currentRound ?? simulatedData?.currentRound ?? 42
     : currentRound
     ? Number(currentRound)
     : 0;
   const displayTimeRemaining = isSimulationMode
-    ? simulatedData?.timeRemaining || 300
+    ? getRoundTimeRemaining(ledger)
     : timeRemaining;
   const displayIsOpen = isSimulationMode
-    ? simulatedData?.isOpen !== undefined
-      ? simulatedData.isOpen
-      : true
+    ? ledger?.market?.isOpen ?? simulatedData?.isOpen ?? true
     : isOpen;
 
   // Reset form after successful submission
@@ -114,9 +116,15 @@ export function BidForm({ onOrderSubmitted, simulatedData }: BidFormProps) {
   // Handle submit
   const handleSubmit = async () => {
     if (!quantity || !price || parseFloat(quantity) <= 0 || parseFloat(price) <= 0) return;
+    setFormError('');
 
     if (isSimulationMode) {
-      // In simulation mode, just call the callback
+      const side = orderType === 'bid' ? 'buy' : 'sell';
+      const result = placeOrder(side, quantity, price);
+      if (!result.success) {
+        setFormError(result.error);
+        return;
+      }
       if (onOrderSubmitted) onOrderSubmitted(orderType, quantity, price);
       setQuantity('');
       setPrice('');
@@ -241,6 +249,33 @@ export function BidForm({ onOrderSubmitted, simulatedData }: BidFormProps) {
             <span>{parseFloat(shaktiBalance).toLocaleString()} SHAKTI</span>
           </div>
         )}
+        {isSimulationMode && (
+          <div className="balance-info">
+            {orderType === 'bid' ? (
+              <>
+                <span>Demo Balance:</span>
+                <span>
+                  {parseFloat(String(ledger?.account?.tokenBalance ?? 0)).toLocaleString(undefined, {
+                    maximumFractionDigits: 2,
+                  })}{' '}
+                  SHAKTI
+                </span>
+              </>
+            ) : (
+              <>
+                <span>Demo Inventory:</span>
+                <span>
+                  {parseFloat(String(ledger?.account?.energyInventory ?? 0)).toLocaleString(undefined, {
+                    maximumFractionDigits: 2,
+                  })}{' '}
+                  kWh
+                </span>
+              </>
+            )}
+          </div>
+        )}
+
+        {formError && <div className="warning error">{formError}</div>}
 
         {/* Submit Button */}
         <button
@@ -503,6 +538,12 @@ const styles = `
   border-radius: 8px;
   color: #fbbf24;
   font-size: 14px;
+}
+
+.warning.error {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.35);
+  color: #fca5a5;
 }
 
 .sim-badge {

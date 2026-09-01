@@ -3,13 +3,16 @@ import PriceChart from './PriceChart';
 import SimulationPanel from './SimulationPanel';
 import { getCurrentPrice } from '../services/api';
 import { useOptionalAppMode } from '../providers/Web3Provider';
-import { TokenBalance, StakingPanel, BidForm } from './web3';
+import { useDemoLedger } from '../context/DemoLedgerContext';
+import { getRoundTimeRemaining } from '../demo/ledger';
+import { TokenBalance, StakingPanel, BidForm, DemoActivityPanel, AuctionRoundViewer } from './web3';
 
 function Dashboard() {
   const [currentPrice, setCurrentPrice] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const { isLiveMode, isSimulationMode } = useOptionalAppMode();
+  const { ledger } = useDemoLedger();
 
   useEffect(() => {
     const fetchPrice = async () => {
@@ -29,17 +32,22 @@ function Dashboard() {
     return () => clearInterval(interval);
   }, []);
 
-  const inferredPrice = currentPrice?.price ?? 0;
-  const inferredRound = Math.max(1, Math.round(inferredPrice * 6));
-  const inferredBalance = (Math.max(inferredPrice, 1) * 180).toFixed(2);
-  const inferredStaked = (Math.max(inferredPrice, 1) * 60).toFixed(2);
-  const inferredRewards = (Math.max(inferredPrice, 1) * 1.4).toFixed(2);
-  const inferredApr = Math.max(3.5, Math.min(22.5, inferredPrice * 2.1));
+  const demoRound = ledger?.market?.currentRound ?? 1;
+  const demoRoundRemaining = getRoundTimeRemaining(ledger);
+  const demoStakedAmount = String(ledger?.account?.stakedAmount ?? 0);
+  const demoPendingRewards = String(ledger?.account?.pendingRewards ?? 0);
+  const demoApr = Number(ledger?.staking?.apr ?? 0);
+  const demoTotalStaked = String(ledger?.staking?.totalStaked ?? 0);
+  const totalTrades = Number(ledger?.market?.totalTrades ?? 0);
+  const totalVolume = Number(ledger?.market?.totalVolumeKwh ?? 0);
 
   return (
     <div className="dashboard">
       <div className="dashboard-header">
         <h2>Energy Market Overview</h2>
+        <p data-testid="sim-disclaimer" className="sim-disclaimer">
+          Simulation. Not connected to a live DISCOM.
+        </p>
         {loading ? (
           <span className="price-badge loading">Loading...</span>
         ) : error ? (
@@ -68,15 +76,14 @@ function Dashboard() {
             variant="detailed"
             showVotingPower
             showTotalSupply
-            simulatedBalance={inferredBalance}
           />
         </div>
 
         <div className="dashboard-card wide">
           <BidForm
             simulatedData={{
-              currentRound: inferredRound,
-              timeRemaining: Math.max(60, 900 - inferredRound * 10),
+              currentRound: demoRound,
+              timeRemaining: demoRoundRemaining,
               isOpen: true,
             }}
           />
@@ -85,13 +92,25 @@ function Dashboard() {
         <div className="dashboard-card wide">
           <StakingPanel
             simulatedData={{
-              stakedAmount: inferredStaked,
-              pendingRewards: inferredRewards,
-              apr: Number(inferredApr.toFixed(2)),
-              totalStaked: (Math.max(inferredPrice, 1) * 700000).toFixed(0),
+              stakedAmount: demoStakedAmount,
+              pendingRewards: demoPendingRewards,
+              apr: demoApr,
+              totalStaked: demoTotalStaked,
             }}
           />
         </div>
+
+        {isSimulationMode && (
+          <div className="dashboard-card wide">
+            <DemoActivityPanel />
+          </div>
+        )}
+
+        {isSimulationMode && (
+          <div className="dashboard-card wide">
+            <AuctionRoundViewer />
+          </div>
+        )}
       </div>
 
       <div className="dashboard-stats">
@@ -101,11 +120,17 @@ function Dashboard() {
         </div>
         <div className="stat-card">
           <span className="stat-label">Active Prosumers</span>
-          <span className="stat-value">{isLiveMode ? 'Live mode' : 'Simulation mode'}</span>
+          <span className="stat-value">{isLiveMode ? 'Live mode' : 'Demo simulation'}</span>
         </div>
         <div className="stat-card">
           <span className="stat-label">Total Energy Traded</span>
-          <span className="stat-value">{isSimulationMode ? 'Computed in simulation' : 'On-chain feed'} </span>
+          <span className="stat-value">
+            {isSimulationMode ? `${totalVolume.toFixed(2)} kWh` : 'On-chain feed'}
+          </span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-label">Filled Demo Trades</span>
+          <span className="stat-value">{isSimulationMode ? totalTrades : 'N/A'}</span>
         </div>
       </div>
     </div>

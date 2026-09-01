@@ -122,6 +122,12 @@
   gap: 1rem;
 }
 
+.sim-disclaimer {
+  margin: 0.25rem 0 0;
+  font-size: 0.85rem;
+  color: #6b7b6e;
+}
+
 .dashboard-header h2 {
   margin: 0;
   font-size: 1.25rem;
