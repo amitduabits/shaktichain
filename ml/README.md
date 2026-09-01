@@ -381,7 +381,7 @@ Check logs in:
 
 ## License
 
-MIT License
+Copyright BITS Pilani. All rights reserved. See the repository root `LICENSE`. This directory is not MIT-licensed.
 
 ## Support
 

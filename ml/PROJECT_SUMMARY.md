@@ -372,7 +372,7 @@ Expected performance on standard hardware:
 
 ## License
 
-MIT License
+Copyright BITS Pilani. All rights reserved. See the repository root `LICENSE`.
 
 ## Contributors
 
