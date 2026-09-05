@@ -104,6 +104,26 @@ class TestAuthEndpoints(TestSetup):
         assert "access_token" in response.json()
         assert response.json()["token_type"] == "bearer"
 
+    def test_register_fleet_role(self, client):
+        response = client.post("/auth/register", json={
+            "email": "fleet@example.com",
+            "password": "password123",
+            "role": "fleet",
+        })
+        assert response.status_code == 201
+        headers = {"Authorization": f"Bearer {response.json()['access_token']}"}
+        me = client.get("/auth/me", headers=headers)
+        assert me.status_code == 200
+        assert me.json()["role"] == "fleet"
+
+    def test_register_admin_rejected(self, client):
+        response = client.post("/auth/register", json={
+            "email": "admin@example.com",
+            "password": "password123",
+            "role": "admin",
+        })
+        assert response.status_code == 400
+
     def test_register_duplicate_email_fails(self, client):
         """Test that registering with existing email fails."""
         # First registration
@@ -216,7 +236,7 @@ class TestAuthEndpoints(TestSetup):
         response = client.get("/auth/me", headers=auth_headers)
         assert response.status_code == 200
         assert response.json()["email"] == "test@example.com"
-        assert response.json()["role"] == "user"
+        assert response.json()["role"] == "ev_owner"
 
     def test_get_current_user_unauthenticated(self, client):
         """Test getting current user info without auth fails."""

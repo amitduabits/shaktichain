@@ -21,7 +21,7 @@ test.describe('Simulation', () => {
 
   test.describe('Dashboard Display', () => {
     test('displays market overview', async ({ page }) => {
-      await expect(page.getByRole('heading', { name: /energy market overview/i })).toBeVisible();
+      await expect(page.getByTestId('role-home')).toBeVisible();
     });
 
     test('displays price chart section', async ({ page }) => {
@@ -199,7 +199,7 @@ test.describe('Responsive Design', () => {
     await page.waitForURL(/dashboard|\/$/);
 
     // Dashboard should be visible and functional
-    await expect(page.getByText(/energy market overview/i)).toBeVisible();
+    await expect(page.getByTestId('role-home')).toBeVisible();
     await expect(page.getByRole('button', { name: /run simulation/i })).toBeVisible();
   });
 
@@ -215,7 +215,7 @@ test.describe('Responsive Design', () => {
 
     await page.waitForURL(/dashboard|\/$/);
 
-    await expect(page.getByText(/energy market overview/i)).toBeVisible();
+    await expect(page.getByTestId('role-home')).toBeVisible();
   });
 });
 

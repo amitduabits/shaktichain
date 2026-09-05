@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { PUBLIC_ROLES, ROLE_LABELS, setDocumentTitle } from '../auth/roles';
 import './Auth.css';
 
 const BASE = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
@@ -10,8 +11,13 @@ function Register({ onSwitchToLogin }) {
   const { register, error, clearError } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [role, setRole] = useState('ev_owner');
   const [loading, setLoading] = useState(false);
   const [localError, setLocalError] = useState('');
+
+  useEffect(() => {
+    setDocumentTitle('Register');
+  }, []);
 
   const validateForm = () => {
     if (!email || !password) {
@@ -42,7 +48,7 @@ function Register({ onSwitchToLogin }) {
     }
 
     setLoading(true);
-    const result = await register(email, password);
+    const result = await register(email, password, role);
     setLoading(false);
 
     if (!result.success) {
@@ -80,6 +86,20 @@ function Register({ onSwitchToLogin }) {
               disabled={loading}
               autoComplete="email"
             />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="role">Role</label>
+            <select
+              id="role"
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+              disabled={loading}
+            >
+              {PUBLIC_ROLES.map((id) => (
+                <option key={id} value={id}>{ROLE_LABELS[id]}</option>
+              ))}
+            </select>
           </div>
 
           <div className="form-group">

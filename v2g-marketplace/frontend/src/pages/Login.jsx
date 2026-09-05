@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { setDocumentTitle } from '../auth/roles';
 import './Auth.css';
 
 const BASE = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
@@ -14,6 +15,10 @@ function Login({ onSwitchToRegister }) {
   const [loginLoading, setLoginLoading] = useState(false);
   const [demoLoading, setDemoLoading] = useState(false);
   const [localError, setLocalError] = useState('');
+
+  useEffect(() => {
+    setDocumentTitle('Login');
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -59,6 +64,7 @@ function Login({ onSwitchToRegister }) {
       <div className="auth-card">
         <h2 className="auth-title">Login</h2>
         <p className="auth-subtitle">Welcome back to V2G Marketplace</p>
+        <p className="auth-hint">New here? Register and pick your organisation type.</p>
 
         <form onSubmit={handleSubmit} className="auth-form">
           {displayError && (

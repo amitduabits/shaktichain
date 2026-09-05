@@ -4,13 +4,13 @@ Shakti-Chain ships a working V2G marketplace demo: a React dashboard, a FastAPI 
 
 ## What a visitor should see
 
-1. Login page with **Enter Demo** (no wallet required).
-2. Energy market overview: live price badge, 24-hour price chart.
-3. Order ticket: place buy and sell orders in INR/kWh.
+1. Login page with **Enter Demo** (no wallet required). Register to pick a role (EV owner, fleet, aggregator, CPO, DISCOM).
+2. Role home: EV owner sees SOC and **Place order**. Other roles have their own home.
+3. Market: buy and sell in INR/kWh (not shown for DISCOM).
 4. Auction round viewer: sealed bids, clearing price, matched volume.
-5. Staking panel: stake, unstake, claim rewards (demo ledger).
-6. Demo Activity: filled orders, fee burn, staker allocation.
-7. Simulation panel: run a city-calibrated agent scenario (Delhi, Mumbai, Bangalore, Chennai, Kolkata).
+5. Settlement: stake, unstake, claim rewards (demo ledger).
+6. Demo-only **View as** switcher: fleet vehicles, DISCOM feeders, CPO sites, admin reset.
+7. DISCOM/admin Reports: city-calibrated simulation (disabled on Pages; needs the local API).
 
 ## Public demo
 
@@ -70,13 +70,14 @@ Open the Vite URL (typically http://localhost:5173).
 
 ## Suggested 8-minute industry script
 
-| Minute | Action | Point to make |
+| Minute | Role view | Action |
 |---|---|---|
-| 0–1 | Open dashboard | This is a two-sided energy market, not a wallet demo. |
-| 1–3 | Place a buy and a sell | Orders are sealed until the round closes. |
-| 3–5 | Show the clearing round | Price is set by excluded marginal traders (McAfee). Winners cannot move their own price. |
-| 5–6 | Show token balance / staking | 1 SHAKTI is intended to represent 1 kWh; mint-on-delivery, burn-on-redemption. |
-| 6–8 | Run a city simulation | Load profiles are calibrated to Indian metropolitan demand, not a generic US/EU toy market. |
+| 0–1 | EV owner | Enter Demo, home, Place order |
+| 1–3 | EV owner | Buy + sell, round viewer |
+| 3–4 | Fleet | View as Fleet, bulk bid / vehicles |
+| 4–5 | DISCOM | View as DISCOM, feeders, no order ticket |
+| 5–6 | EV owner | Settlement: stake |
+| 6–8 | DISCOM/admin | City sim note (or run if the API is up) |
 
 ## What this demo is not
 

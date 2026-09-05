@@ -5,6 +5,8 @@
  * a substitute for bcrypt/JWT on the FastAPI backend.
  */
 
+import { isPublicRole, normalizeRole } from './roles';
+
 export const STORE_KEY = 'v2g_local_accounts_v1';
 export const LOCAL_TOKEN_PREFIX = 'local:';
 export const MIN_PASSWORD_LENGTH = 6;
@@ -75,7 +77,7 @@ export function userFromRecord(record) {
   return {
     id: record.id,
     email: record.email,
-    role: 'user',
+    role: normalizeRole(record.role),
     created_at: record.createdAt,
   };
 }
@@ -112,13 +114,20 @@ function toPublicUser(record) {
   return userFromRecord(record);
 }
 
-export async function registerLocal({ email, password }) {
+export async function registerLocal({ email, password, role } = {}) {
   const normalized = normalizeEmail(email);
   if (!normalized || !normalized.includes('@')) {
     return { ok: false, error: 'Please enter a valid email address' };
   }
   if (!password || String(password).length < MIN_PASSWORD_LENGTH) {
     return { ok: false, error: 'Password must be at least 6 characters' };
+  }
+  if (role === 'admin') {
+    return { ok: false, error: 'Admin cannot be self-registered' };
+  }
+  const nextRole = role ? normalizeRole(role) : 'ev_owner';
+  if (role && !isPublicRole(nextRole)) {
+    return { ok: false, error: 'Invalid role' };
   }
 
   const accounts = loadAccounts();
@@ -131,6 +140,7 @@ export async function registerLocal({ email, password }) {
     email: normalized,
     passwordDigest: await digest(password),
     createdAt: new Date().toISOString(),
+    role: nextRole,
   };
   accounts.push(record);
   saveAccounts(accounts);

@@ -19,6 +19,7 @@ type OrderType = 'bid' | 'ask';
 
 interface BidFormProps {
   onOrderSubmitted?: (orderType: OrderType, quantity: string, price: string) => void;
+  defaultSide?: OrderType;
   simulatedData?: {
     currentRound: number;
     timeRemaining: number;
@@ -26,14 +27,18 @@ interface BidFormProps {
   };
 }
 
-export function BidForm({ onOrderSubmitted, simulatedData }: BidFormProps) {
+export function BidForm({ onOrderSubmitted, simulatedData, defaultSide = 'bid' }: BidFormProps) {
   const { isLiveMode, isSimulationMode } = useAppMode();
   const { ledger, placeOrder } = useDemoLedger();
   const { isConnected } = useAccount();
   const chainId = useChainId();
 
   // Form state
-  const [orderType, setOrderType] = useState<OrderType>('bid');
+  const [orderType, setOrderType] = useState<OrderType>(defaultSide);
+
+  useEffect(() => {
+    setOrderType(defaultSide);
+  }, [defaultSide]);
   const [quantity, setQuantity] = useState('');
   const [price, setPrice] = useState('');
   const [formError, setFormError] = useState('');
@@ -190,10 +195,11 @@ export function BidForm({ onOrderSubmitted, simulatedData }: BidFormProps) {
       {/* Order Form */}
       <div className="order-form">
         <div className="input-group">
-          <label>
+          <label htmlFor="order-quantity">
             {orderType === 'bid' ? 'Energy Quantity (kWh)' : 'Energy to Sell (kWh)'}
           </label>
           <input
+            id="order-quantity"
             type="number"
             value={quantity}
             onChange={(e) => setQuantity(e.target.value)}
@@ -210,10 +216,11 @@ export function BidForm({ onOrderSubmitted, simulatedData }: BidFormProps) {
         </div>
 
         <div className="input-group">
-          <label>
+          <label htmlFor="order-price">
             {orderType === 'bid' ? 'Max Price (SHAKTI/kWh)' : 'Min Price (SHAKTI/kWh)'}
           </label>
           <input
+            id="order-price"
             type="number"
             value={price}
             onChange={(e) => setPrice(e.target.value)}

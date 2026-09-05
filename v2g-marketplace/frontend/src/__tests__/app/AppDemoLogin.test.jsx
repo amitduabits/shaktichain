@@ -51,11 +51,11 @@ describe('App demo login flow', () => {
     await user.click(screen.getByRole('button', { name: 'Enter Demo' }));
 
     await waitFor(() => {
-      expect(screen.getByTestId('dashboard-screen')).toBeInTheDocument();
+      expect(screen.getByTestId('role-home')).toBeInTheDocument();
     });
 
     expect(demoLoginMock).toHaveBeenCalledTimes(1);
     expect(getCurrentUserMock).toHaveBeenCalled();
-    expect(window.location.pathname).toBe('/dashboard');
+    expect(window.location.pathname).toBe('/home');
   });
 });

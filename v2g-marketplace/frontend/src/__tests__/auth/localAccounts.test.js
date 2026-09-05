@@ -18,7 +18,7 @@ describe('localAccounts', () => {
     });
     expect(registered.ok).toBe(true);
     expect(registered.user.email).toBe('qa@v2g.local');
-    expect(registered.user.role).toBe('user');
+    expect(registered.user.role).toBe('ev_owner');
     expect(registered.user).not.toHaveProperty('passwordDigest');
 
     const loggedIn = await loginLocal({
@@ -86,6 +86,23 @@ describe('localAccounts', () => {
     });
     expect(loggedIn.ok).toBe(true);
     expect(loggedIn.user.id).toBe(registered.user.id);
+  });
+
+  it('stores a public role and rejects admin', async () => {
+    const fleet = await registerLocal({
+      email: 'fleet@v2g.local',
+      password: 'testpass1',
+      role: 'fleet',
+    });
+    expect(fleet.ok).toBe(true);
+    expect(fleet.user.role).toBe('fleet');
+
+    const admin = await registerLocal({
+      email: 'admin@v2g.local',
+      password: 'testpass1',
+      role: 'admin',
+    });
+    expect(admin.ok).toBe(false);
   });
 
   it('does not require a guest record for Enter Demo', async () => {

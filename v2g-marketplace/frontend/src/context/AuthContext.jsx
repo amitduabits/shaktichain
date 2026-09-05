@@ -12,6 +12,7 @@ import {
   findLocalUserById,
   localTokenFor,
   LOCAL_TOKEN_PREFIX,
+  userFromRecord,
 } from '../auth/localAccounts';
 
 const AuthContext = createContext(null);
@@ -22,7 +23,7 @@ const DEMO_TOKEN = 'demo-local';
 const DEMO_USER = {
   id: 'demo-user',
   email: 'demo@v2g.local',
-  role: 'user',
+  role: 'ev_owner',
   created_at: '2026-01-01T00:00:00Z',
 };
 
@@ -123,12 +124,7 @@ export function AuthProvider({ children }) {
       const id = token.slice(LOCAL_TOKEN_PREFIX.length);
       const record = findLocalUserById(id);
       if (record) {
-        setUser({
-          id: record.id,
-          email: record.email,
-          role: 'user',
-          created_at: record.createdAt,
-        });
+        setUser(userFromRecord(record));
       } else {
         logout();
       }
@@ -181,16 +177,7 @@ export function AuthProvider({ children }) {
       if (!record) {
         throw new Error('Local session not found');
       }
-      return applySession(
-        {
-          id: record.id,
-          email: record.email,
-          role: 'user',
-          created_at: record.createdAt,
-        },
-        token,
-        remember
-      );
+      return applySession(userFromRecord(record), token, remember);
     }
 
     localStorage.setItem(TOKEN_KEY, token);
@@ -226,11 +213,11 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const register = async (email, password) => {
+  const register = async (email, password, role = 'ev_owner') => {
     setError(null);
     try {
       if (await shouldUseLocalAuth()) {
-        const result = await registerLocal({ email, password });
+        const result = await registerLocal({ email, password, role });
         if (!result.ok) {
           setError(result.error);
           return { success: false, error: result.error };
@@ -238,7 +225,7 @@ export function AuthProvider({ children }) {
         applySession(result.user, localTokenFor(result.user.id), false);
         return { success: true };
       }
-      const response = await apiRegister({ email, password });
+      const response = await apiRegister({ email, password, role });
       await consumeToken(response.access_token, false);
       return { success: true };
     } catch (err) {

@@ -11,6 +11,11 @@ import {
   unstakeDemoTokens,
   claimDemoRewards,
   resetDemoLedger,
+  addDemoVehicle,
+  removeDemoVehicle,
+  updateDemoVehicle,
+  setDemoPortfolio,
+  placeBulkDemoAsks,
 } from '../demo/ledger';
 
 const DemoLedgerContext = createContext(null);
@@ -168,6 +173,36 @@ export function DemoLedgerProvider({ children }) {
     return { success: true };
   }, [setLedgerState]);
 
+  const addVehicle = useCallback(() => {
+    const result = addDemoVehicle(ledgerRef.current);
+    if (result?.ledger) setLedgerState(result.ledger);
+    return operationResult(result, 'Could not add vehicle.');
+  }, [setLedgerState]);
+
+  const removeVehicle = useCallback((vehicleId) => {
+    const result = removeDemoVehicle(ledgerRef.current, vehicleId);
+    if (result?.ledger) setLedgerState(result.ledger);
+    return operationResult(result, 'Could not remove vehicle.');
+  }, [setLedgerState]);
+
+  const updateVehicle = useCallback((vehicleId, patch) => {
+    const result = updateDemoVehicle(ledgerRef.current, vehicleId, patch);
+    if (result?.ledger) setLedgerState(result.ledger);
+    return operationResult(result, 'Could not update vehicle.');
+  }, [setLedgerState]);
+
+  const setPortfolio = useCallback((portfolio) => {
+    const result = setDemoPortfolio(ledgerRef.current, portfolio);
+    if (result?.ledger) setLedgerState(result.ledger);
+    return operationResult(result, 'Could not update mix.');
+  }, [setLedgerState]);
+
+  const placeBulkAsks = useCallback((quantity, price, count) => {
+    const result = placeBulkDemoAsks(ledgerRef.current, { quantity, price, count });
+    if (result?.ledger) setLedgerState(result.ledger);
+    return operationResult(result, 'Bulk bid failed.');
+  }, [setLedgerState]);
+
   const value = useMemo(
     () => ({
       ledger,
@@ -177,8 +212,26 @@ export function DemoLedgerProvider({ children }) {
       claimRewards,
       resetDemoState,
       accrueRewards,
+      addVehicle,
+      removeVehicle,
+      updateVehicle,
+      setPortfolio,
+      placeBulkAsks,
     }),
-    [accrueRewards, claimRewards, ledger, placeOrder, resetDemoState, stake, unstake]
+    [
+      accrueRewards,
+      addVehicle,
+      claimRewards,
+      ledger,
+      placeBulkAsks,
+      placeOrder,
+      removeVehicle,
+      resetDemoState,
+      setPortfolio,
+      stake,
+      unstake,
+      updateVehicle,
+    ]
   );
 
   return <DemoLedgerContext.Provider value={value}>{children}</DemoLedgerContext.Provider>;

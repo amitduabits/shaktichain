@@ -41,7 +41,7 @@ test.describe('Local register and login (no FastAPI)', () => {
     await page.getByLabel(/^password$/i).fill(password);
     await page.getByRole('button', { name: /^register$/i }).click();
 
-    await expect(page.getByRole('heading', { name: /energy market overview/i })).toBeVisible({
+    await expect(page.getByTestId('role-home')).toBeVisible({
       timeout: 15000,
     });
     await expect(page.getByText(email)).toBeVisible();
@@ -53,7 +53,7 @@ test.describe('Local register and login (no FastAPI)', () => {
     await page.getByLabel(/email/i).fill(email);
     await page.getByLabel(/^password$/i).fill(password);
     await page.getByRole('button', { name: /^login$/i }).click();
-    await expect(page.getByRole('heading', { name: /energy market overview/i })).toBeVisible({
+    await expect(page.getByTestId('role-home')).toBeVisible({
       timeout: 15000,
     });
     await expect(page.getByText(email)).toBeVisible();
@@ -65,10 +65,10 @@ test.describe('Local register and login (no FastAPI)', () => {
     await page.getByRole('button', { name: /^login$/i }).click();
     await expect(page.getByTestId('auth-error')).toBeVisible();
     await expect(page.getByRole('heading', { name: /login/i })).toBeVisible();
-    await expect(page.getByRole('heading', { name: /energy market overview/i })).toHaveCount(0);
+    await expect(page.getByTestId('role-home')).toHaveCount(0);
 
     await page.getByRole('button', { name: 'Enter Demo' }).click();
-    await expect(page.getByRole('heading', { name: /energy market overview/i })).toBeVisible({
+    await expect(page.getByTestId('role-home')).toBeVisible({
       timeout: 15000,
     });
   });

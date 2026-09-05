@@ -100,7 +100,7 @@ class Database:
                 id TEXT PRIMARY KEY,
                 email TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
-                role TEXT DEFAULT 'user' CHECK(role IN ('user', 'admin')),
+                role TEXT DEFAULT 'ev_owner' CHECK(role IN ('ev_owner', 'fleet', 'aggregator', 'cpo', 'discom', 'admin')),
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -175,7 +175,64 @@ class Database:
             ON auction_matches(round_id)
         """)
 
+        self._migrate_users_roles(conn, cursor)
         conn.commit()
+
+    def _migrate_users_roles(self, conn, cursor):
+        """Map legacy user/trader roles and rebuild CHECK if the old table exists."""
+        cursor.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='users'"
+        )
+        row = cursor.fetchone()
+        if row is None:
+            return
+        sql = row[0] or ""
+        allowed = ("ev_owner", "fleet", "aggregator", "cpo", "discom", "admin")
+
+        def map_role(value):
+            if value in (None, "", "user", "trader"):
+                return "ev_owner"
+            if value in allowed:
+                return value
+            return "ev_owner"
+
+        if "ev_owner" in sql:
+            cursor.execute(
+                "UPDATE users SET role = 'ev_owner' WHERE role IN ('user', 'trader') OR role IS NULL"
+            )
+            return
+
+        cursor.execute(
+            """
+            CREATE TABLE users_role_v3 (
+                id TEXT PRIMARY KEY,
+                email TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                role TEXT DEFAULT 'ev_owner' CHECK(role IN ('ev_owner', 'fleet', 'aggregator', 'cpo', 'discom', 'admin')),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        cursor.execute(
+            "SELECT id, email, password_hash, role, created_at FROM users"
+        )
+        for existing in cursor.fetchall():
+            cursor.execute(
+                """
+                INSERT INTO users_role_v3 (id, email, password_hash, role, created_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    existing["id"],
+                    existing["email"],
+                    existing["password_hash"],
+                    map_role(existing["role"]),
+                    existing["created_at"],
+                ),
+            )
+        cursor.execute("DROP TABLE users")
+        cursor.execute("ALTER TABLE users_role_v3 RENAME TO users")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)")
 
     def save_simulation(self, sim_data: dict) -> str:
         """
@@ -404,7 +461,9 @@ class Database:
         user_id = user_data.get("id", str(uuid.uuid4()))
         email = user_data["email"]
         password_hash = user_data["password_hash"]
-        role = user_data.get("role", "user")
+        role = user_data.get("role", "ev_owner")
+        if role in (None, "", "user", "trader"):
+            role = "ev_owner"
 
         with self._write_lock:
             conn = self._get_connection()
@@ -439,7 +498,7 @@ class Database:
         if row is None:
             return None
 
-        return dict(row)
+        return self._user_from_row(row)
 
     def get_user_by_id(self, user_id: str) -> Optional[dict]:
         """
@@ -464,7 +523,22 @@ class Database:
         if row is None:
             return None
 
-        return dict(row)
+        return self._user_from_row(row)
+
+    def list_users(self) -> list:
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, email, password_hash, role, created_at FROM users ORDER BY created_at"
+        )
+        return [self._user_from_row(row) for row in cursor.fetchall()]
+
+    def _user_from_row(self, row) -> dict:
+        data = dict(row)
+        role = data.get("role")
+        if role in (None, "", "user", "trader"):
+            data["role"] = "ev_owner"
+        return data
 
     def create_auction_round(self, reveal_deadline: str, round_id: Optional[str] = None) -> str:
         """Create a new auction round."""

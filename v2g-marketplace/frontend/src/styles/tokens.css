@@ -1,0 +1,62 @@
+:root {
+  --space-1: 8px;
+  --space-2: 16px;
+  --space-3: 24px;
+  --space-4: 32px;
+  --font-body: 14px;
+  --font-lead: 16px;
+  --font-section: 20px;
+  --font-title: 28px;
+  --focus: #fbbf24;
+  --cta: #10b981;
+  --tap: 44px;
+  --disclaimer-fg: #fde68a;
+  --disclaimer-bg: #1e293b;
+}
+
+.btn-primary,
+button.auth-button,
+button.home-cta,
+.run-button,
+.submit-btn {
+  min-height: var(--tap);
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.skip-link {
+  position: absolute;
+  left: 8px;
+  top: -40px;
+  background: var(--cta);
+  color: #042f1e;
+  padding: 8px 16px;
+  z-index: 200;
+  font-weight: 600;
+}
+
+.skip-link:focus {
+  top: 8px;
+}
+
+.sim-strip {
+  width: 100%;
+  background: var(--disclaimer-bg);
+  color: var(--disclaimer-fg);
+  padding: 8px 16px;
+  font-size: 14px;
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-indicator {
+    animation: none !important;
+  }
+}

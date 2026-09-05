@@ -1,4 +1,8 @@
+import { createRoleFixtures } from './fixtures';
+
 export const DEMO_LEDGER_SCHEMA_VERSION = 1;
+export const MAX_VEHICLES = 20;
+export const MIN_VEHICLES = 1;
 
 const YEAR_SECONDS = 365 * 24 * 60 * 60;
 const DEFAULT_ROUND_DURATION_SECONDS = 15 * 60;
@@ -87,6 +91,7 @@ export function createInitialDemoLedger(nowMs = Date.now()) {
     },
     recentOrders: [],
     recentActions: [],
+    ...createRoleFixtures(),
   };
 }
 
@@ -130,6 +135,18 @@ export function normalizeDemoLedger(ledger, nowMs = Date.now()) {
     },
     recentOrders: Array.isArray(ledger.recentOrders) ? ledger.recentOrders.slice(0, MAX_RECENT_ORDERS) : [],
     recentActions: Array.isArray(ledger.recentActions) ? ledger.recentActions.slice(0, MAX_RECENT_ACTIONS) : [],
+    vehicles: Array.isArray(ledger.vehicles) && ledger.vehicles.length
+      ? ledger.vehicles
+      : createRoleFixtures().vehicles,
+    sites: Array.isArray(ledger.sites) && ledger.sites.length
+      ? ledger.sites
+      : createRoleFixtures().sites,
+    feeders: Array.isArray(ledger.feeders) && ledger.feeders.length
+      ? ledger.feeders
+      : createRoleFixtures().feeders,
+    portfolio: ledger.portfolio && typeof ledger.portfolio === 'object'
+      ? { ...createRoleFixtures().portfolio, ...ledger.portfolio }
+      : createRoleFixtures().portfolio,
   };
 }
 
@@ -392,6 +409,89 @@ export function claimDemoRewards(ledger, nowMs = Date.now()) {
   );
 
   return success(next, { claimed: roundTo(pending, 4) });
+}
+
+export function addDemoVehicle(ledger, nowMs = Date.now()) {
+  const next = normalizeDemoLedger(ledger, nowMs);
+  if (next.vehicles.length >= MAX_VEHICLES) {
+    return fail('VEHICLE_LIMIT', 'Maximum 20 vehicles.', next);
+  }
+  const vehicle = {
+    id: `veh-${Date.now()}-${next.vehicles.length + 1}`,
+    name: `Vehicle ${next.vehicles.length + 1}`,
+    city: 'Delhi',
+    capacityKwh: 60,
+    soc: 0.5,
+  };
+  return success({
+    ...next,
+    vehicles: [...next.vehicles, vehicle],
+  }, { vehicle });
+}
+
+export function removeDemoVehicle(ledger, vehicleId, nowMs = Date.now()) {
+  const next = normalizeDemoLedger(ledger, nowMs);
+  if (next.vehicles.length <= MIN_VEHICLES) {
+    return fail('VEHICLE_MIN', 'Keep at least one vehicle.', next);
+  }
+  return success({
+    ...next,
+    vehicles: next.vehicles.filter((row) => row.id !== vehicleId),
+  });
+}
+
+export function updateDemoVehicle(ledger, vehicleId, patch, nowMs = Date.now()) {
+  const next = normalizeDemoLedger(ledger, nowMs);
+  return success({
+    ...next,
+    vehicles: next.vehicles.map((row) => (row.id === vehicleId ? { ...row, ...patch } : row)),
+  });
+}
+
+export function setDemoPortfolio(ledger, portfolio, nowMs = Date.now()) {
+  const next = normalizeDemoLedger(ledger, nowMs);
+  return success({
+    ...next,
+    portfolio: {
+      residential: Number(portfolio.residential) || 0,
+      commercial: Number(portfolio.commercial) || 0,
+      fleet: Number(portfolio.fleet) || 0,
+    },
+  });
+}
+
+export function placeBulkDemoAsks(ledger, { quantity, price, count, nowMs = Date.now() }) {
+  const n = Math.max(1, Number(count) || 1);
+  const parsedQuantity = toPositiveNumber(quantity);
+  const parsedPrice = toPositiveNumber(price);
+  if (!parsedQuantity || !parsedPrice) {
+    return fail('INVALID_ORDER', 'Quantity and price must be greater than zero.', ledger);
+  }
+  let next = accrueDemoRewards(ledger, nowMs);
+  if (parsedQuantity * n > next.account.energyInventory + 1e-9) {
+    return fail('INSUFFICIENT_INVENTORY', 'Not enough energy inventory for this bulk bid.', next);
+  }
+  for (let i = 0; i < n; i += 1) {
+    const result = placeDemoOrder(next, {
+      side: 'sell',
+      quantity: parsedQuantity,
+      price: parsedPrice,
+      nowMs,
+    });
+    if (!result.ok) {
+      return result;
+    }
+    next = result.ledger;
+  }
+  next = appendAction(
+    next,
+    buildAction(
+      'bulk_ask',
+      { vehicleCount: n, quantity: parsedQuantity, price: parsedPrice },
+      nowSeconds(nowMs)
+    )
+  );
+  return success(next, { vehicleCount: n });
 }
 
 export function resetDemoLedger(nowMs = Date.now()) {

@@ -53,10 +53,23 @@ logger = LoggerFactory.get_auth_logger()
 
 # === Schemas ===
 
+PUBLIC_ROLES = ("ev_owner", "fleet", "aggregator", "cpo", "discom")
+ALL_ROLES = (*PUBLIC_ROLES, "admin")
+
+
+def normalize_role(role: Optional[str]) -> str:
+    if role in (None, "", "user", "trader"):
+        return "ev_owner"
+    if role in ALL_ROLES:
+        return role
+    return "ev_owner"
+
+
 class UserRegister(BaseModel):
     """Schema for user registration."""
     email: EmailStr
     password: str = Field(..., min_length=6)
+    role: Optional[str] = None
 
 
 class UserLogin(BaseModel):
@@ -241,12 +254,24 @@ async def register(user_data: UserRegister):
             detail="Email already registered"
         )
 
+    requested_role = user_data.role or "ev_owner"
+    if requested_role == "admin":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Admin cannot be self-registered",
+        )
+    if requested_role not in PUBLIC_ROLES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid role",
+        )
+
     # Create user with hashed password
     password_hash = hash_password(user_data.password)
     user_id = db.create_user({
         "email": user_data.email,
         "password_hash": password_hash,
-        "role": "user",
+        "role": requested_role,
     })
 
     # Record metrics
@@ -260,7 +285,7 @@ async def register(user_data: UserRegister):
     )
 
     # Generate token
-    token = create_access_token(user_id, user_data.email, "user")
+    token = create_access_token(user_id, user_data.email, requested_role)
 
     return TokenResponse(access_token=token)
 
@@ -315,7 +340,7 @@ async def login(user_data: UserLogin):
     )
 
     # Generate token
-    token = create_access_token(user["id"], user["email"], user["role"])
+    token = create_access_token(user["id"], user["email"], normalize_role(user["role"]))
 
     return TokenResponse(access_token=token)
 
@@ -335,7 +360,7 @@ async def demo_login():
 
     db = get_database()
     demo_email = os.getenv("DEMO_USER_EMAIL", "demo@v2g.local")
-    demo_role = os.getenv("DEMO_USER_ROLE", "user")
+    demo_role = normalize_role(os.getenv("DEMO_USER_ROLE", "ev_owner"))
     demo_password = os.getenv("DEMO_USER_PASSWORD", "demo-mode-not-for-production")
 
     user = db.get_user_by_email(demo_email)
@@ -362,8 +387,23 @@ async def demo_login():
         email=user["email"],
     )
 
-    token = create_access_token(user["id"], user["email"], user["role"])
+    mapped_role = normalize_role(user["role"])
+    token = create_access_token(user["id"], user["email"], mapped_role)
     return TokenResponse(access_token=token)
+
+
+def require_roles(*roles: str):
+    """FastAPI dependency factory: caller must hold one of the roles."""
+
+    async def _inner(current_user: dict = Depends(get_current_user)) -> dict:
+        if normalize_role(current_user.get("role")) not in roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="This view is for another account type.",
+            )
+        return current_user
+
+    return _inner
 
 
 @router.get("/me", response_model=UserResponse)
@@ -374,6 +414,6 @@ async def get_current_user_info(current_user: dict = Depends(get_current_user)):
     return UserResponse(
         id=current_user["id"],
         email=current_user["email"],
-        role=current_user["role"],
+        role=normalize_role(current_user["role"]),
         created_at=current_user["created_at"],
     )

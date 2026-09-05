@@ -15,7 +15,7 @@ test.describe('Live Pages visitor path', () => {
     await page.getByLabel(/email/i).fill(email);
     await page.getByLabel(/^password$/i).fill(password);
     await page.getByRole('button', { name: /^register$/i }).click();
-    await expect(page.getByRole('heading', { name: /energy market overview/i })).toBeVisible({
+    await expect(page.getByTestId('role-home')).toBeVisible({
       timeout: 15000,
     });
   }
@@ -39,11 +39,12 @@ test.describe('Live Pages visitor path', () => {
     await page.getByLabel(/^password$/i).fill(password);
     await page.getByRole('button', { name: /^register$/i }).click();
 
-    await expect(page.getByRole('heading', { name: /energy market overview/i })).toBeVisible({
+    await expect(page.getByTestId('role-home')).toBeVisible({
       timeout: 15000,
     });
     await expect(page.getByTestId('sim-disclaimer')).toBeVisible();
     await expect(page.getByText(email)).toBeVisible();
+    await page.getByTestId('home-cta').click();
     await expect(page.getByRole('heading', { name: /place order/i })).toBeVisible();
 
     const qty = page.locator('.bid-form input[type="number"]').nth(0);
@@ -69,7 +70,7 @@ test.describe('Live Pages visitor path', () => {
     await page.getByLabel(/email/i).fill(email);
     await page.getByLabel(/^password$/i).fill(password);
     await page.getByRole('button', { name: /^login$/i }).click();
-    await expect(page.getByRole('heading', { name: /energy market overview/i })).toBeVisible({
+    await expect(page.getByTestId('role-home')).toBeVisible({
       timeout: 15000,
     });
     await expect(page.getByText(email)).toBeVisible();
@@ -83,7 +84,7 @@ test.describe('Live Pages visitor path', () => {
     await expect(page.getByRole('heading', { name: /login/i })).toBeVisible();
 
     await page.getByRole('button', { name: 'Enter Demo' }).click();
-    await expect(page.getByRole('heading', { name: /energy market overview/i })).toBeVisible({
+    await expect(page.getByTestId('role-home')).toBeVisible({
       timeout: 15000,
     });
     await expect(page.getByText('demo@v2g.local')).toBeVisible();
@@ -95,6 +96,6 @@ test.describe('Live Pages visitor path', () => {
     await registerOnDemo(page, email, 'testpass1');
     await expect(page.getByTestId('sim-disclaimer')).toBeVisible();
     await expect(page.getByText(email)).toBeVisible();
-    await expect(page.getByRole('heading', { name: /place order/i })).toBeVisible();
+    await expect(page.getByTestId('home-cta')).toBeVisible();
   });
 });

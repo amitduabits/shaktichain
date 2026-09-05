@@ -4,9 +4,10 @@ test.describe('Industry demo walkthrough', () => {
   test('Enter Demo, trade, and reset', async ({ page }) => {
     await page.goto('/login');
     await page.getByRole('button', { name: 'Enter Demo' }).click();
-    await expect(page.getByRole('heading', { name: /energy market overview/i })).toBeVisible({
+    await expect(page.getByTestId('role-home')).toBeVisible({
       timeout: 15000,
     });
+    await page.getByTestId('home-cta').click();
     await expect(page.getByTestId('sim-disclaimer')).toBeVisible();
 
     const buyQty = page.getByLabel(/quantity/i).first();
@@ -45,7 +46,7 @@ test.describe('Industry demo viewports', () => {
       await page.setViewportSize({ width: size.width, height: size.height });
       await page.goto('/login');
       await page.getByRole('button', { name: 'Enter Demo' }).click();
-      await expect(page.getByText(/energy market overview/i)).toBeVisible({ timeout: 15000 });
+      await expect(page.getByTestId('role-home')).toBeVisible({ timeout: 15000 });
     });
   }
 });

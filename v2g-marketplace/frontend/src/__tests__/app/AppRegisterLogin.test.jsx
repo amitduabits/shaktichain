@@ -58,7 +58,7 @@ describe('App register/login local mode', () => {
     await user.click(screen.getByRole('button', { name: /^register$/i }));
 
     await waitFor(() => {
-      expect(screen.getByTestId('dashboard-screen')).toBeInTheDocument();
+      expect(screen.getByTestId('role-home')).toBeInTheDocument();
     });
     expect(screen.getByText(email)).toBeInTheDocument();
     expect(registerMock).not.toHaveBeenCalled();
@@ -77,7 +77,7 @@ describe('App register/login local mode', () => {
     await user.click(screen.getByRole('button', { name: /^register$/i }));
 
     await waitFor(() => {
-      expect(screen.getByTestId('dashboard-screen')).toBeInTheDocument();
+      expect(screen.getByTestId('role-home')).toBeInTheDocument();
     });
 
     await user.click(screen.getByRole('button', { name: /logout/i }));
@@ -90,7 +90,7 @@ describe('App register/login local mode', () => {
     await user.click(screen.getByRole('button', { name: /^login$/i }));
 
     await waitFor(() => {
-      expect(screen.getByTestId('dashboard-screen')).toBeInTheDocument();
+      expect(screen.getByTestId('role-home')).toBeInTheDocument();
     });
     expect(screen.getByText(email)).toBeInTheDocument();
     expect(loginMock).not.toHaveBeenCalled();
@@ -107,7 +107,7 @@ describe('App register/login local mode', () => {
     await user.type(screen.getByLabelText(/^password$/i), 'testpass1');
     await user.click(screen.getByRole('button', { name: /^register$/i }));
     await waitFor(() => {
-      expect(screen.getByTestId('dashboard-screen')).toBeInTheDocument();
+      expect(screen.getByTestId('role-home')).toBeInTheDocument();
     });
 
     await user.click(screen.getByRole('button', { name: /logout/i }));
