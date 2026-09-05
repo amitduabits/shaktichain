@@ -19,9 +19,15 @@ function Dashboard() {
       try {
         const data = await getCurrentPrice();
         setCurrentPrice(data);
-        setLoading(false);
+        setError(null);
       } catch (_error) {
-        setError('Failed to fetch current price');
+        if (import.meta.env.VITE_DEMO_ONLY === 'true') {
+          setCurrentPrice({ price: 4.85 });
+          setError(null);
+        } else {
+          setError('Failed to fetch current price');
+        }
+      } finally {
         setLoading(false);
       }
     };

@@ -11,6 +11,11 @@ import './App.css';
 
 const APP_VERSION = '1.0.0';
 const AUTH_ROUTES = new Set(['/login', '/register']);
+const BASE = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
+const USE_HASH = BASE !== '';
+const DEMO_ONLY = ['1', 'true', 'yes', 'on'].includes(
+  String(import.meta.env.VITE_DEMO_ONLY || '').trim().toLowerCase()
+);
 
 function normalizePath(pathname) {
   if (pathname === '/dashboard') {
@@ -28,11 +33,24 @@ function normalizePath(pathname) {
 function AppContent() {
   const { user, loading, isAuthenticated, logout } = useAuth();
   const [apiStatus, setApiStatus] = useState('checking');
-  const [currentPath, setCurrentPath] = useState(() =>
-    normalizePath(window.location.pathname)
-  );
+  const [currentPath, setCurrentPath] = useState(() => {
+    if (USE_HASH) {
+      return normalizePath(window.location.hash.replace(/^#/, '') || '/login');
+    }
+    return normalizePath(window.location.pathname);
+  });
 
   const navigate = useCallback((path, replace = false) => {
+    if (USE_HASH) {
+      const next = `#${path}`;
+      if (replace) {
+        window.history.replaceState({}, '', next);
+      } else if (window.location.hash !== next) {
+        window.location.hash = path;
+      }
+      setCurrentPath(normalizePath(path));
+      return;
+    }
     if (window.location.pathname !== path) {
       if (replace) {
         window.history.replaceState({}, '', path);
@@ -44,6 +62,10 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
+    if (DEMO_ONLY) {
+      setApiStatus('demo');
+      return;
+    }
     const checkHealth = async () => {
       try {
         await getHealth();
@@ -58,10 +80,18 @@ function AppContent() {
 
   useEffect(() => {
     const onPopState = () => {
+      if (USE_HASH) {
+        setCurrentPath(normalizePath(window.location.hash.replace(/^#/, '') || '/login'));
+        return;
+      }
       setCurrentPath(normalizePath(window.location.pathname));
     };
     window.addEventListener('popstate', onPopState);
-    return () => window.removeEventListener('popstate', onPopState);
+    window.addEventListener('hashchange', onPopState);
+    return () => {
+      window.removeEventListener('popstate', onPopState);
+      window.removeEventListener('hashchange', onPopState);
+    };
   }, []);
 
   useEffect(() => {
@@ -71,19 +101,15 @@ function AppContent() {
 
     if (!isAuthenticated) {
       if (!AUTH_ROUTES.has(currentPath)) {
-        if (window.location.pathname !== '/login') {
-          window.history.replaceState({}, '', '/login');
-        }
+        navigate('/login', true);
       }
       return;
     }
 
     if (AUTH_ROUTES.has(currentPath)) {
-      if (window.location.pathname !== '/dashboard') {
-        window.history.replaceState({}, '', '/dashboard');
-      }
+      navigate('/dashboard', true);
     }
-  }, [currentPath, isAuthenticated, loading]);
+  }, [currentPath, isAuthenticated, loading, navigate]);
 
   const handleLogout = useCallback(() => {
     logout();
@@ -120,6 +146,7 @@ function AppContent() {
                 {apiStatus === 'checking' && 'Connecting...'}
                 {apiStatus === 'connected' && 'API Connected'}
                 {apiStatus === 'disconnected' && 'API Offline'}
+                {apiStatus === 'demo' && 'Simulation demo'}
               </span>
             </div>
             <div className="web3-wallet">

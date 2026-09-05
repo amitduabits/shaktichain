@@ -12,6 +12,12 @@ Shakti-Chain ships a working V2G marketplace demo: a React dashboard, a FastAPI 
 6. Demo Activity: filled orders, fee burn, staker allocation.
 7. Simulation panel: run a city-calibrated agent scenario (Delhi, Mumbai, Bangalore, Chennai, Kolkata).
 
+## Public demo
+
+https://amitduabits.github.io/shaktichain/demo/
+
+Click **Enter Demo**. Buy, sell, stake, and reset run in the browser. No wallet and no backend required.
+
 ## Fastest local start
 
 From the repository root:

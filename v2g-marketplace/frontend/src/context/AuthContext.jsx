@@ -10,6 +10,18 @@ const AuthContext = createContext(null);
 
 const TOKEN_KEY = 'auth_token';
 const REMEMBER_KEY = 'auth_remember';
+const DEMO_TOKEN = 'demo-local';
+const DEMO_USER = {
+  id: 'demo-user',
+  email: 'demo@v2g.local',
+  role: 'user',
+  created_at: '2026-01-01T00:00:00Z',
+};
+
+function isDemoOnly() {
+  const value = String(import.meta.env.VITE_DEMO_ONLY || '').trim().toLowerCase();
+  return ['1', 'true', 'yes', 'on'].includes(value);
+}
 
 function parseJwt(token) {
   try {
@@ -52,6 +64,16 @@ export function AuthProvider({ children }) {
       return;
     }
 
+    if (token === DEMO_TOKEN) {
+      if (isDemoOnly()) {
+        setUser(DEMO_USER);
+      } else {
+        logout();
+      }
+      setLoading(false);
+      return;
+    }
+
     if (isTokenExpired(token)) {
       logout();
       setLoading(false);
@@ -75,7 +97,7 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     const interval = setInterval(() => {
       const token = localStorage.getItem(TOKEN_KEY);
-      if (token && isTokenExpired(token)) {
+      if (token && token !== DEMO_TOKEN && isTokenExpired(token)) {
         logout();
       }
     }, 60000);
@@ -124,6 +146,12 @@ export function AuthProvider({ children }) {
   const demoLogin = async () => {
     setError(null);
     try {
+      if (isDemoOnly()) {
+        localStorage.setItem(TOKEN_KEY, DEMO_TOKEN);
+        localStorage.removeItem(REMEMBER_KEY);
+        setUser(DEMO_USER);
+        return { success: true };
+      }
       const response = await apiDemoLogin();
       await consumeToken(response.access_token, false);
       return { success: true };
