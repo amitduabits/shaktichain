@@ -29,7 +29,7 @@
   margin: 0;
   font-size: 1.5rem;
   font-weight: 600;
-  background: linear-gradient(90deg, #10b981, #3b82f6);
+  background: linear-gradient(135deg, #10b981, #f59e0b);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -111,14 +111,15 @@
 .kpi-card {
   background: #1e293b;
   border: 1px solid #334155;
+  border-left: 4px solid #10b981;
   border-radius: 8px;
   padding: 16px;
 }
 
 .home-cta {
-  background: #10b981;
-  color: #042f1e;
-  border: none;
+  background: #047857;
+  color: #ffffff;
+  border: 2px solid #047857;
   border-radius: 8px;
   padding: 12px 20px;
   font-weight: 600;
@@ -181,7 +182,7 @@
 }
 
 .mix-bar.residential { background: #10b981; }
-.mix-bar.commercial { background: #3b82f6; }
+.mix-bar.commercial { background: #14b8a6; }
 .mix-bar.fleet { background: #f59e0b; }
 
 .bulk-form {

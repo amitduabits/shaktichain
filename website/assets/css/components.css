@@ -1,0 +1,124 @@
+.skip-link {
+  position: absolute;
+  left: 8px;
+  top: -48px;
+  background: var(--color-primary);
+  color: #042f1e;
+  padding: 8px 16px;
+  z-index: 20;
+  font-weight: 700;
+}
+.skip-link:focus { top: 8px; }
+
+.cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--tap);
+  margin: 1rem 0.75rem 0 0;
+  background: var(--color-primary-dark);
+  color: #ffffff;
+  text-decoration: none;
+  padding: 12px 24px;
+  font-weight: 700;
+  border: 2px solid var(--color-primary-dark);
+  border-radius: var(--radius-md);
+  transition: background 200ms ease-out, box-shadow 200ms ease-out, transform 200ms ease-out;
+}
+.cta::before {
+  content: "⚡";
+  color: var(--color-secondary);
+  margin-right: 8px;
+}
+.cta:hover {
+  background: #065f46;
+  box-shadow: var(--shadow-accent);
+  transform: translateY(-1px);
+}
+.cta:active {
+  border-color: var(--color-secondary);
+}
+.cta.secondary {
+  background: transparent;
+  color: var(--color-primary-dark);
+  border-color: var(--color-primary-dark);
+}
+.cta.secondary::before { content: none; }
+.cta.secondary:hover {
+  background: var(--color-primary-light);
+  color: var(--color-neutral-dark);
+}
+
+.stat {
+  background: var(--color-soft);
+  padding: 16px;
+  border-radius: var(--radius-md);
+  border-left: 4px solid var(--color-primary);
+  box-shadow: var(--shadow-md);
+}
+.stat strong {
+  display: block;
+  font-size: var(--font-size-2xl);
+  font-weight: 700;
+  color: var(--color-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.stat span {
+  display: block;
+  margin-top: 6px;
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}
+.stat.limit { border-left-color: var(--color-status-warning); }
+.stat.limit strong { color: var(--color-status-warning); }
+
+.who article {
+  background: var(--color-soft);
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  border-top: 4px solid var(--color-primary);
+}
+.who article.role-discom { border-top-color: var(--color-primary); }
+.who article.role-cpo { border-top-color: var(--color-secondary); }
+.who article.role-fleet { border-top-color: var(--color-status-success); }
+.who article.role-aggregator { border-top-color: var(--color-status-warning); }
+.who h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  color: var(--text-primary);
+}
+.who .icon {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+}
+
+.layer-legend {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin: 8px 0 16px;
+  font-size: var(--font-size-sm);
+}
+.layer-legend span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+}
+.swatch.app { background: #1f2937; }
+.swatch.intel { background: #14b8a6; }
+.swatch.market { background: #f59e0b; }
+.swatch.settle { background: #10b981; }
+
+code, .mono {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+}

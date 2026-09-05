@@ -1,0 +1,40 @@
+@media (prefers-reduced-motion: no-preference) {
+  .cta-primary {
+    animation: cta-pulse 2.4s ease-in-out 1;
+  }
+  .stat {
+    animation: rise 500ms ease-out both;
+  }
+  .stat:nth-child(2) { animation-delay: 80ms; }
+  .stat:nth-child(3) { animation-delay: 160ms; }
+  .stat:nth-child(4) { animation-delay: 240ms; }
+  .arch-wrap svg .flow circle {
+    animation: drop 1.6s ease-in-out infinite;
+  }
+  .arch-wrap svg .flow circle:nth-child(2) { animation-delay: 0.2s; }
+  .arch-wrap svg .flow circle:nth-child(3) { animation-delay: 0.4s; }
+  .arch-wrap svg .flow circle:nth-child(4) { animation-delay: 0.6s; }
+}
+
+@keyframes cta-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.0); }
+  50% { box-shadow: 0 0 0 8px rgba(16, 185, 129, 0.18); }
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes drop {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cta-primary,
+  .stat,
+  .arch-wrap svg .flow circle {
+    animation: none;
+  }
+}

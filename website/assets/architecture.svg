@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 360" role="img" aria-labelledby="archTitle archDesc">
+  <title id="archTitle">Four-layer Shakti-Chain architecture</title>
+  <desc id="archDesc">Application, intelligence, market, and settlement layers stacked from top to bottom, with energy flowing downward.</desc>
+  <rect width="720" height="360" rx="12" fill="#f9fafb"/>
+  <g font-family="Inter, Helvetica, sans-serif">
+    <rect x="48" y="24" width="624" height="64" rx="8" fill="#1f2937"/>
+    <text x="72" y="50" fill="#f9fafb" font-size="16" font-weight="700">Application</text>
+    <text x="72" y="70" fill="#d1fae5" font-size="13">Role websites, demo ledger, industry briefing</text>
+    <rect x="48" y="104" width="624" height="64" rx="8" fill="#14b8a6"/>
+    <text x="72" y="130" fill="#042f2f" font-size="16" font-weight="700">Intelligence</text>
+    <text x="72" y="150" fill="#042f2f" font-size="13">ML forecasting, Indian city load profiles</text>
+    <rect x="48" y="184" width="624" height="64" rx="8" fill="#f59e0b"/>
+    <text x="72" y="210" fill="#1f2937" font-size="16" font-weight="700">McAfee market</text>
+    <text x="72" y="230" fill="#1f2937" font-size="13">Off-chain matching, 15-minute sealed rounds</text>
+    <rect x="48" y="264" width="624" height="64" rx="8" fill="#10b981"/>
+    <text x="72" y="290" fill="#042f1e" font-size="16" font-weight="700">Settlement</text>
+    <text x="72" y="310" fill="#042f1e" font-size="13">SHAKTI ERC-20 on Polygon, mint-on-delivery, burn-on-redemption</text>
+  </g>
+  <g class="flow" fill="#f59e0b">
+    <circle cx="640" cy="56" r="5"/>
+    <circle cx="640" cy="136" r="5"/>
+    <circle cx="640" cy="216" r="5"/>
+    <circle cx="640" cy="296" r="5"/>
+  </g>
+</svg>
