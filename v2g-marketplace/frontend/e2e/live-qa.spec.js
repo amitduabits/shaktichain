@@ -88,6 +88,17 @@ test.describe('Live Pages visitor path', () => {
       timeout: 15000,
     });
     await expect(page.getByText('demo@v2g.local')).toBeVisible();
+
+    await page.getByTestId('role-switcher').selectOption('fleet');
+    await expect(page.getByTestId('role-home')).toHaveAttribute('data-role', 'fleet');
+    await expect(page.getByText('demo@v2g.local')).toBeVisible();
+    await page.getByTestId('role-switcher').selectOption('discom');
+    await expect(page.getByTestId('role-home')).toHaveAttribute('data-role', 'discom');
+    await expect(page.getByTestId('home-cta')).toHaveCount(0);
+    await page.getByTestId('role-switcher').selectOption('cpo');
+    await expect(page.getByTestId('role-home')).toHaveAttribute('data-role', 'cpo');
+    await page.getByTestId('role-switcher').selectOption('aggregator');
+    await expect(page.getByTestId('role-home')).toHaveAttribute('data-role', 'aggregator');
   });
 
   test('register on mobile 375x667', async ({ page }) => {
