@@ -149,9 +149,11 @@ function AppContent() {
                 {apiStatus === 'demo' && 'Simulation demo'}
               </span>
             </div>
-            <div className="web3-wallet">
-              <ConnectWallet compact />
-            </div>
+            {!DEMO_ONLY && (
+              <div className="web3-wallet">
+                <ConnectWallet compact />
+              </div>
+            )}
             <div className="user-menu">
               <span className="user-email">{user?.email}</span>
               <button className="logout-button" onClick={handleLogout}>

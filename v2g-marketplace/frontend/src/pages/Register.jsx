@@ -2,6 +2,10 @@ import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import './Auth.css';
 
+const BASE = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
+const USE_HASH = BASE !== '';
+const LOGIN_HREF = USE_HASH ? '#/login' : '/login';
+
 function Register({ onSwitchToLogin }) {
   const { register, error, clearError } = useAuth();
   const [email, setEmail] = useState('');
@@ -62,11 +66,11 @@ function Register({ onSwitchToLogin }) {
 
         <form onSubmit={handleSubmit} className="auth-form">
           {displayError && (
-            <div className="auth-error">{displayError}</div>
+            <div className="auth-error" data-testid="auth-error">{displayError}</div>
           )}
 
           <div className="form-group">
-            <label htmlFor="email">Email</label>
+            <label htmlFor="email">Email (user id)</label>
             <input
               type="email"
               id="email"
@@ -100,7 +104,7 @@ function Register({ onSwitchToLogin }) {
           <p>
             Already have an account?{' '}
             <a
-              href="/login"
+              href={LOGIN_HREF}
               className="auth-link"
               onClick={handleSwitchToLogin}
             >

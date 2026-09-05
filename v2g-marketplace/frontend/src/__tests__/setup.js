@@ -15,12 +15,19 @@ afterEach(() => {
   cleanup();
 });
 
-// Mock localStorage
+// Mock localStorage with an in-memory map so dual-mode auth can persist.
+const memoryStore = new Map();
 const localStorageMock = {
-  getItem: vi.fn(),
-  setItem: vi.fn(),
-  removeItem: vi.fn(),
-  clear: vi.fn(),
+  getItem: vi.fn((key) => (memoryStore.has(key) ? memoryStore.get(key) : null)),
+  setItem: vi.fn((key, value) => {
+    memoryStore.set(String(key), String(value));
+  }),
+  removeItem: vi.fn((key) => {
+    memoryStore.delete(key);
+  }),
+  clear: vi.fn(() => {
+    memoryStore.clear();
+  }),
 };
 globalThis.localStorage = localStorageMock;
 
@@ -60,6 +67,7 @@ globalThis.URL.revokeObjectURL = vi.fn();
 // Reset all mocks after each test
 afterEach(() => {
   vi.clearAllMocks();
+  memoryStore.clear();
   localStorage.getItem.mockClear();
   localStorage.setItem.mockClear();
   localStorage.removeItem.mockClear();

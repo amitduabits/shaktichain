@@ -4,7 +4,31 @@
 
 import { test, expect } from '@playwright/test';
 
-test.describe('Authentication', () => {
+async function apiAvailable(request) {
+  const demoOnly = ['1', 'true', 'yes', 'on'].includes(
+    String(process.env.VITE_DEMO_ONLY || '').trim().toLowerCase()
+  );
+  if (demoOnly) {
+    return false;
+  }
+  const candidates = ['/health', '/api/health', 'http://127.0.0.1:8000/health'];
+  for (const url of candidates) {
+    try {
+      const response = await request.get(url);
+      if (response.ok()) {
+        return true;
+      }
+    } catch {
+      // try the next probe
+    }
+  }
+  return false;
+}
+
+test.describe('Authentication @api', () => {
+  test.beforeEach(async ({ request }) => {
+    test.skip(!(await apiAvailable(request)), 'FastAPI health is down or VITE_DEMO_ONLY is set');
+  });
   test.describe('Login Page', () => {
     test('shows login form', async ({ page }) => {
       await page.goto('/login');

@@ -4,6 +4,7 @@ import {
   startSimulation,
   getSimulationStatus,
   downloadSimulationCsv,
+  getHealth,
 } from '../services/api';
 
 const DURATION_OPTIONS = [
@@ -17,7 +18,13 @@ const REGION_OPTIONS = [
   { value: 'mumbai', label: 'Mumbai' },
   { value: 'bangalore', label: 'Bangalore' },
   { value: 'chennai', label: 'Chennai' },
+  { value: 'kolkata', label: 'Kolkata' },
 ];
+
+function isDemoOnly() {
+  const value = String(import.meta.env.VITE_DEMO_ONLY || '').trim().toLowerCase();
+  return ['1', 'true', 'yes', 'on'].includes(value);
+}
 
 function SimulationPanel() {
   // Configuration state
@@ -43,6 +50,31 @@ function SimulationPanel() {
   });
   const [results, setResults] = useState(null);
   const [error, setError] = useState(null);
+  const demoOnly = isDemoOnly();
+  const [apiOffline, setApiOffline] = useState(demoOnly);
+
+  useEffect(() => {
+    if (demoOnly) {
+      return;
+    }
+    let cancelled = false;
+    getHealth()
+      .then(() => {
+        if (!cancelled) {
+          setApiOffline(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setApiOffline(true);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [demoOnly]);
+
+  const cityScaleBlocked = demoOnly || apiOffline;
 
   // Polling ref
   const pollIntervalRef = useRef(null);
@@ -161,6 +193,9 @@ function SimulationPanel() {
 
   // Start simulation
   const handleRunSimulation = async () => {
+    if (cityScaleBlocked) {
+      return;
+    }
     setStatus('running');
     setError(null);
     setResults(null);
@@ -307,11 +342,17 @@ function SimulationPanel() {
             </select>
           </div>
 
+          {cityScaleBlocked && (
+            <p className="simulation-offline-note" data-testid="sim-api-note">
+              City-scale runs need the local API. See DEMO.md.
+            </p>
+          )}
+
           {/* Run Button */}
           <button
             className="run-button"
             onClick={handleRunSimulation}
-            disabled={isRunning}
+            disabled={isRunning || cityScaleBlocked}
           >
             {isRunning ? (
               <>

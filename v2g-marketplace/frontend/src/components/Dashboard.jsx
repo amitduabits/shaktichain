@@ -21,7 +21,10 @@ function Dashboard() {
         setCurrentPrice(data);
         setError(null);
       } catch (_error) {
-        if (import.meta.env.VITE_DEMO_ONLY === 'true') {
+        const demoOnly = ['1', 'true', 'yes', 'on'].includes(
+          String(import.meta.env.VITE_DEMO_ONLY || '').trim().toLowerCase()
+        );
+        if (demoOnly) {
           setCurrentPrice({ price: 4.85 });
           setError(null);
         } else {

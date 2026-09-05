@@ -1,10 +1,18 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import {
   login as apiLogin,
   register as apiRegister,
   demoLogin as apiDemoLogin,
   getCurrentUser,
+  getHealth,
 } from '../services/api';
+import {
+  registerLocal,
+  loginLocal,
+  findLocalUserById,
+  localTokenFor,
+  LOCAL_TOKEN_PREFIX,
+} from '../auth/localAccounts';
 
 const AuthContext = createContext(null);
 
@@ -39,6 +47,14 @@ function parseJwt(token) {
   }
 }
 
+function isJwtToken(token) {
+  return typeof token === 'string' && token.split('.').length === 3 && token.includes('.');
+}
+
+function isLocalSessionToken(token) {
+  return typeof token === 'string' && token.startsWith(LOCAL_TOKEN_PREFIX);
+}
+
 function isTokenExpired(token) {
   const payload = parseJwt(token);
   if (!payload || !payload.exp) return true;
@@ -49,11 +65,44 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const apiUpRef = useRef(isDemoOnly() ? false : null);
 
   const logout = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(REMEMBER_KEY);
     setUser(null);
+  }, []);
+
+  const shouldUseLocalAuth = useCallback(async () => {
+    if (isDemoOnly()) {
+      apiUpRef.current = false;
+      return true;
+    }
+    if (apiUpRef.current === false) {
+      return true;
+    }
+    if (apiUpRef.current === true) {
+      return false;
+    }
+    try {
+      await getHealth();
+      apiUpRef.current = true;
+      return false;
+    } catch {
+      apiUpRef.current = false;
+      return true;
+    }
+  }, []);
+
+  const applySession = useCallback((nextUser, token, remember = false) => {
+    localStorage.setItem(TOKEN_KEY, token);
+    if (remember) {
+      localStorage.setItem(REMEMBER_KEY, 'true');
+    } else {
+      localStorage.removeItem(REMEMBER_KEY);
+    }
+    setUser(nextUser);
+    return nextUser;
   }, []);
 
   const checkAuth = useCallback(async () => {
@@ -65,8 +114,21 @@ export function AuthProvider({ children }) {
     }
 
     if (token === DEMO_TOKEN) {
-      if (isDemoOnly()) {
-        setUser(DEMO_USER);
+      setUser(DEMO_USER);
+      setLoading(false);
+      return;
+    }
+
+    if (isLocalSessionToken(token)) {
+      const id = token.slice(LOCAL_TOKEN_PREFIX.length);
+      const record = findLocalUserById(id);
+      if (record) {
+        setUser({
+          id: record.id,
+          email: record.email,
+          role: 'user',
+          created_at: record.createdAt,
+        });
       } else {
         logout();
       }
@@ -74,7 +136,7 @@ export function AuthProvider({ children }) {
       return;
     }
 
-    if (isTokenExpired(token)) {
+    if (isJwtToken(token) && isTokenExpired(token)) {
       logout();
       setLoading(false);
       return;
@@ -95,9 +157,13 @@ export function AuthProvider({ children }) {
   }, [checkAuth]);
 
   useEffect(() => {
+    shouldUseLocalAuth();
+  }, [shouldUseLocalAuth]);
+
+  useEffect(() => {
     const interval = setInterval(() => {
       const token = localStorage.getItem(TOKEN_KEY);
-      if (token && token !== DEMO_TOKEN && isTokenExpired(token)) {
+      if (token && isJwtToken(token) && isTokenExpired(token)) {
         logout();
       }
     }, 60000);
@@ -106,6 +172,27 @@ export function AuthProvider({ children }) {
   }, [logout]);
 
   const consumeToken = useCallback(async (token, remember = false) => {
+    if (token === DEMO_TOKEN) {
+      return applySession(DEMO_USER, token, remember);
+    }
+    if (isLocalSessionToken(token)) {
+      const id = token.slice(LOCAL_TOKEN_PREFIX.length);
+      const record = findLocalUserById(id);
+      if (!record) {
+        throw new Error('Local session not found');
+      }
+      return applySession(
+        {
+          id: record.id,
+          email: record.email,
+          role: 'user',
+          created_at: record.createdAt,
+        },
+        token,
+        remember
+      );
+    }
+
     localStorage.setItem(TOKEN_KEY, token);
     if (remember) {
       localStorage.setItem(REMEMBER_KEY, 'true');
@@ -115,11 +202,20 @@ export function AuthProvider({ children }) {
     const userData = await getCurrentUser();
     setUser(userData);
     return userData;
-  }, []);
+  }, [applySession]);
 
   const login = async (email, password, remember = false) => {
     setError(null);
     try {
+      if (await shouldUseLocalAuth()) {
+        const result = await loginLocal({ email, password });
+        if (!result.ok) {
+          setError(result.error);
+          return { success: false, error: result.error };
+        }
+        applySession(result.user, localTokenFor(result.user.id), remember);
+        return { success: true };
+      }
       const response = await apiLogin({ email, password });
       await consumeToken(response.access_token, remember);
       return { success: true };
@@ -133,6 +229,15 @@ export function AuthProvider({ children }) {
   const register = async (email, password) => {
     setError(null);
     try {
+      if (await shouldUseLocalAuth()) {
+        const result = await registerLocal({ email, password });
+        if (!result.ok) {
+          setError(result.error);
+          return { success: false, error: result.error };
+        }
+        applySession(result.user, localTokenFor(result.user.id), false);
+        return { success: true };
+      }
       const response = await apiRegister({ email, password });
       await consumeToken(response.access_token, false);
       return { success: true };
@@ -146,10 +251,8 @@ export function AuthProvider({ children }) {
   const demoLogin = async () => {
     setError(null);
     try {
-      if (isDemoOnly()) {
-        localStorage.setItem(TOKEN_KEY, DEMO_TOKEN);
-        localStorage.removeItem(REMEMBER_KEY);
-        setUser(DEMO_USER);
+      if (await shouldUseLocalAuth()) {
+        applySession(DEMO_USER, DEMO_TOKEN, false);
         return { success: true };
       }
       const response = await apiDemoLogin();

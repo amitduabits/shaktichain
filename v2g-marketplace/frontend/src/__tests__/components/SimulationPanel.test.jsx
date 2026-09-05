@@ -13,6 +13,7 @@ vi.mock('../../services/api', () => ({
   startSimulation: vi.fn(),
   getSimulationStatus: vi.fn(),
   downloadSimulationCsv: vi.fn(),
+  getHealth: vi.fn().mockResolvedValue({ status: 'healthy' }),
 }));
 
 // Mock AgentMixSlider
@@ -76,6 +77,7 @@ describe('SimulationPanel', () => {
       expect(screen.getByText('Mumbai')).toBeInTheDocument();
       expect(screen.getByText('Bangalore')).toBeInTheDocument();
       expect(screen.getByText('Chennai')).toBeInTheDocument();
+      expect(screen.getByText('Kolkata')).toBeInTheDocument();
     });
 
     it('renders agent mix slider', () => {

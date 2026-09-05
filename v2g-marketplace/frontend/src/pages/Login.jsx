@@ -2,6 +2,10 @@ import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import './Auth.css';
 
+const BASE = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
+const USE_HASH = BASE !== '';
+const REGISTER_HREF = USE_HASH ? '#/register' : '/register';
+
 function Login({ onSwitchToRegister }) {
   const { login, demoLogin, error, clearError } = useAuth();
   const [email, setEmail] = useState('');
@@ -58,11 +62,11 @@ function Login({ onSwitchToRegister }) {
 
         <form onSubmit={handleSubmit} className="auth-form">
           {displayError && (
-            <div className="auth-error">{displayError}</div>
+            <div className="auth-error" data-testid="auth-error">{displayError}</div>
           )}
 
           <div className="form-group">
-            <label htmlFor="email">Email</label>
+            <label htmlFor="email">Email (user id)</label>
             <input
               type="email"
               id="email"
@@ -116,7 +120,7 @@ function Login({ onSwitchToRegister }) {
           <p>
             Don't have an account?{' '}
             <a
-              href="/register"
+              href={REGISTER_HREF}
               className="auth-link"
               onClick={handleSwitchToRegister}
             >
