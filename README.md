@@ -22,12 +22,15 @@ Retail rails such as UPI batch slowly and take a large share of a typical ₹15�
 |---|---|
 | This repository | https://github.com/amitduabits/shaktichain |
 | Working marketplace demo | https://amitduabits.github.io/shaktichain/demo/ — **Enter Demo**, no wallet required |
+| S3EID 2026 workshop lab | https://amitduabits.github.io/shaktichain/workshop/ — predict, run, modify, explain. No account. |
 | API | FastAPI + OpenAPI at `/docs` once the backend is running |
 | Smart contracts | [`shakti-contracts/`](shakti-contracts/) |
 | Experiment harness | [`experiments/`](experiments/) |
 
 Industry site: https://amitduabits.github.io/shaktichain/  
 Public demo: https://amitduabits.github.io/shaktichain/demo/ (simulation; **Enter Demo**, no wallet).
+
+S3EID 2026 hands-on lab (18 November, afternoon demonstration): https://amitduabits.github.io/shaktichain/workshop/
 
 ## Measured results (simulation)
 

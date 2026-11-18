@@ -16,6 +16,12 @@ Shakti-Chain ships a working V2G marketplace demo: a React dashboard, a FastAPI 
 
 https://amitduabits.github.io/shaktichain/demo/
 
+## S3EID 2026 workshop lab
+
+https://amitduabits.github.io/shaktichain/workshop/
+
+This is the afternoon hands-on lab (predict, run, modify, explain). It is separate from the marketplace dashboard above. No account and no wallet. **Email exit ticket** opens a message to amit.dua@pilani.bits-pilani.ac.in with the participant's name, solved exercises, and written reflections. When the instructor mail relay is configured, the same ticket is sent through Resend instead. Resend's unverified sandbox can deliver only to mail.amitdua@gmail.com. **Export my work** saves the record in the browser.
+
 Click **Enter Demo**. Buy, sell, stake, and reset run in the browser. No wallet and no backend required.
 
 ## Fastest local start
